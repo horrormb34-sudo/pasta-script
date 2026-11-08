@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Full Menu + Tested Visuals*
+-- *PASTA: Full Menu + Dynamic Distance*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -26,7 +26,7 @@ local Settings = {
     HealthESP = true,
     DistanceESP = true,
     WeaponESP = true,
-    ESPMaxDistance = 1000,
+    ESPMaxDistance = 1000, -- Меняется ползунком
     
     ColorBoxEnemy = Color3.fromRGB(255, 105, 180),
     ColorBoxAlly = Color3.fromRGB(255, 182, 193),
@@ -261,7 +261,11 @@ CreateToggle(PageVisuals, "Name", true, function(s) Settings.NameESP = s end)
 CreateToggle(PageVisuals, "Health Bar", true, function(s) Settings.HealthESP = s end)
 CreateToggle(PageVisuals, "Distance (m)", true, function(s) Settings.DistanceESP = s end)
 CreateToggle(PageVisuals, "Weapon", true, function(s) Settings.WeaponESP = s end)
-CreateSlider(PageVisuals, "Max Distance (m)", 50, 2000, Settings.ESPMaxDistance, function(val) Settings.ESPMaxDistance = val end)
+
+-- ПОЛЗУНОК ДЛЯ ДАЛЬНОСТИ
+CreateSlider(PageVisuals, "Max Distance (m)", 50, 3000, Settings.ESPMaxDistance, function(val) 
+    Settings.ESPMaxDistance = val 
+end)
 
 -- ANTI-AIM
 CreateToggle(PageAntiAim, "Jitter", false, function(s) Settings.JitterEnabled = s end)
@@ -331,30 +335,16 @@ local function CreateESP()
     local obj = {box = {}, skel = {}, healthBar = Drawing.new("Line"), textName = Drawing.new("Text"), textDist = Drawing.new("Text"), textWeap = Drawing.new("Text")}
     for i = 1, 4 do
         local line = Drawing.new("Line")
-        line.Thickness = 1.5
-        line.Visible = false
-        table.insert(obj.box, line)
+        line.Thickness = 1.5; line.Visible = false; table.insert(obj.box, line)
     end
     for i = 1, 15 do
         local line = Drawing.new("Line")
-        line.Thickness = 1
-        line.Visible = false
-        table.insert(obj.skel, line)
+        line.Thickness = 1; line.Visible = false; table.insert(obj.skel, line)
     end
-    obj.healthBar.Thickness = 2
-    obj.healthBar.Visible = false
-    obj.textName.Size = 14
-    obj.textName.Center = true
-    obj.textName.Outline = true
-    obj.textName.Visible = false
-    obj.textDist.Size = 12
-    obj.textDist.Center = true
-    obj.textDist.Outline = true
-    obj.textDist.Visible = false
-    obj.textWeap.Size = 12
-    obj.textWeap.Center = true
-    obj.textWeap.Outline = true
-    obj.textWeap.Visible = false
+    obj.healthBar.Thickness = 2; obj.healthBar.Visible = false
+    obj.textName.Size = 14; obj.textName.Center = true; obj.textName.Outline = true; obj.textName.Visible = false
+    obj.textDist.Size = 12; obj.textDist.Center = true; obj.textDist.Outline = true; obj.textDist.Visible = false
+    obj.textWeap.Size = 12; obj.textWeap.Center = true; obj.textWeap.Outline = true; obj.textWeap.Visible = false
     return obj
 end
 
@@ -390,10 +380,7 @@ RunService.RenderStepped:Connect(function()
             if ESP_Objects[player] then
                 for _, l in pairs(ESP_Objects[player].box) do l:Remove() end
                 for _, l in pairs(ESP_Objects[player].skel) do l:Remove() end
-                ESP_Objects[player].healthBar:Remove()
-                ESP_Objects[player].textName:Remove()
-                ESP_Objects[player].textDist:Remove()
-                ESP_Objects[player].textWeap:Remove()
+                ESP_Objects[player].healthBar:Remove(); ESP_Objects[player].textName:Remove(); ESP_Objects[player].textDist:Remove(); ESP_Objects[player].textWeap:Remove()
                 ESP_Objects[player] = nil
             end
             continue
