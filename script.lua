@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Fixed Full Menu*
+-- *PASTA: BillboardGui Visuals (Skeleton, Weapon, HP)*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -25,6 +25,7 @@ local Settings = {
 local Highlights, Drawings = {}, {}
 local FOVCircle = Drawing.new("Circle")
 
+-- UI (как было, без изменений)
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PastaUI"
 ScreenGui.ResetOnSpawn = false
@@ -34,7 +35,7 @@ local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Settings.ColorBg
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.Position = UDim2.new(0, 20, 0, 100)
-MainFrame.Size = UDim2.new(0, 400, 0, 420)
+MainFrame.Size = UDim2.new(0, 400, 0, 400)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -216,7 +217,6 @@ TabVisuals.MouseButton1Click:Connect(function() SelectTab(TabVisuals, PageVisual
 TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAim) end)
 SelectTab(TabVisuals, PageVisuals)
 
--- НАПОЛНЕНИЕ
 CreateToggle(PageMisc, "Speed Hack", false, function(s) Settings.SpeedEnabled = s end)
 CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s end)
 
@@ -246,7 +246,7 @@ CloseBtn.MouseButton1Click:Connect(function()
     for _, hl in pairs(Highlights) do if hl and hl.Parent then hl:Destroy() end end
     for _, draw in pairs(Drawings) do
         if draw.skel then for _, l in pairs(draw.skel) do l:Remove() end end
-        if draw.text then draw.text:Remove() end
+        if draw.gui then draw.gui:Destroy() end
     end
     ScreenGui:Destroy()
 end)
@@ -278,15 +278,47 @@ local function GetClosestEnemy()
 end
 
 local function CreateDrawing()
-    local obj = {skel = {}, textWeap = Drawing.new("Text"), textHp = Drawing.new("Text"), textDist = Drawing.new("Text")}
+    local obj = {skel = {}, gui = Instance.new("BillboardGui")}
     for i = 1, 15 do
         local l = Drawing.new("Line")
         l.Thickness = 1.5; l.Visible = false
         table.insert(obj.skel, l)
     end
-    obj.textWeap.Size, obj.textWeap.Center, obj.textWeap.Outline, obj.textWeap.Visible = 14, true, true, false
-    obj.textHp.Size, obj.textHp.Center, obj.textHp.Outline, obj.textHp.Visible = 12, true, true, false
-    obj.textDist.Size, obj.textDist.Center, obj.textDist.Outline, obj.textDist.Visible = 12, true, true, false
+    
+    obj.gui.Size = UDim2.new(0, 200, 0, 100)
+    obj.gui.AlwaysOnTop = true
+    obj.gui.Enabled = false
+    
+    local textHp = Instance.new("TextLabel", obj.gui)
+    textHp.Name = "HpText"
+    textHp.BackgroundTransparency = 1
+    textHp.Size = UDim2.new(1, 0, 0, 15)
+    textHp.Position = UDim2.new(0, 0, 0, 0)
+    textHp.Font = Enum.Font.GothamBold
+    textHp.TextColor3 = Settings.ColorText
+    textHp.TextSize = 12
+    textHp.TextStrokeTransparency = 0
+    
+    local textWeap = Instance.new("TextLabel", obj.gui)
+    textWeap.Name = "WeapText"
+    textWeap.BackgroundTransparency = 1
+    textWeap.Size = UDim2.new(1, 0, 0, 15)
+    textWeap.Position = UDim2.new(0, 0, 0, 15)
+    textWeap.Font = Enum.Font.GothamBold
+    textWeap.TextColor3 = Settings.ColorText
+    textWeap.TextSize = 12
+    textWeap.TextStrokeTransparency = 0
+    
+    local textDist = Instance.new("TextLabel", obj.gui)
+    textDist.Name = "DistText"
+    textDist.BackgroundTransparency = 1
+    textDist.Size = UDim2.new(1, 0, 0, 15)
+    textDist.Position = UDim2.new(0, 0, 0, 30)
+    textDist.Font = Enum.Font.GothamBold
+    textDist.TextColor3 = Settings.ColorText
+    textDist.TextSize = 12
+    textDist.TextStrokeTransparency = 0
+    
     return obj
 end
 
@@ -311,7 +343,7 @@ RunService.RenderStepped:Connect(function()
             if Highlights[player] then Highlights[player]:Destroy(); Highlights[player] = nil end
             if Drawings[player] then 
                 for _, l in pairs(Drawings[player].skel) do l:Remove() end
-                Drawings[player].textWeap:Remove(); Drawings[player].textHp:Remove(); Drawings[player].textDist:Remove()
+                Drawings[player].gui:Destroy()
                 Drawings[player] = nil 
             end
             continue
@@ -320,7 +352,6 @@ RunService.RenderStepped:Connect(function()
         local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
         
         if Settings.ESPEnabled and distMeters <= Settings.ESPMaxDistance then
-            -- Подсветка
             if not Highlights[player] then
                 local hl = Instance.new("Highlight")
                 hl.Parent = pChar
@@ -333,7 +364,6 @@ RunService.RenderStepped:Connect(function()
             Highlights[player].OutlineTransparency = 0.5
             Highlights[player].DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             
-            -- Текст и скелет
             if Settings.SkeletonESP or Settings.WeaponESP or Settings.HealthESP or Settings.DistanceESP then
                 if not Drawings[player] then Drawings[player] = CreateDrawing() end
                 local esp = Drawings[player]
@@ -362,41 +392,40 @@ RunService.RenderStepped:Connect(function()
                         end
                     else for _, l in pairs(esp.skel) do l.Visible = false end end
                     
+                    esp.gui.Adornee = pChar.Head
+                    esp.gui.Enabled = true
+                    
+                    local hpText = esp.gui:FindFirstChild("HpText")
+                    local weapText = esp.gui:FindFirstChild("WeapText")
+                    local distText = esp.gui:FindFirstChild("DistText")
+                    
+                    if Settings.HealthESP then
+                        hpText.Text = "HP: " .. math.floor(pHum.Health)
+                        hpText.Visible = true
+                    else hpText.Visible = false end
+                    
                     if Settings.WeaponESP then
                         local tool = pChar:FindFirstChildOfClass("Tool")
                         if tool then
-                            esp.textWeap.Text = tool.Name
-                            esp.textWeap.Position = Vector2.new(pos.X, pos.Y + (100 / pos.Z * 5) + 20)
-                            esp.textWeap.Color = Settings.ColorText
-                            esp.textWeap.Visible = true
-                        else esp.textWeap.Visible = false end
-                    else esp.textWeap.Visible = false end
-                    
-                    if Settings.HealthESP then
-                        esp.textHp.Text = "HP: " .. math.floor(pHum.Health)
-                        esp.textHp.Position = Vector2.new(pos.X, pos.Y - (100 / pos.Z * 5) - 20)
-                        esp.textHp.Color = Settings.ColorText
-                        esp.textHp.Visible = true
-                    else esp.textHp.Visible = false end
+                            weapText.Text = tool.Name
+                            weapText.Visible = true
+                        else weapText.Visible = false end
+                    else weapText.Visible = false end
                     
                     if Settings.DistanceESP then
-                        esp.textDist.Text = "[" .. distMeters .. "m]"
-                        esp.textDist.Position = Vector2.new(pos.X, pos.Y - (100 / pos.Z * 5) - 35)
-                        esp.textDist.Color = Settings.ColorText
-                        esp.textDist.Visible = true
-                    else esp.textDist.Visible = false end
+                        distText.Text = "[" .. distMeters .. "m]"
+                        distText.Visible = true
+                    else distText.Visible = false end
                 else
                     for _, l in pairs(esp.skel) do l.Visible = false end
-                    esp.textWeap.Visible = false; esp.textHp.Visible = false; esp.textDist.Visible = false
+                    esp.gui.Enabled = false
                 end
             end
         else
             if Highlights[player] then Highlights[player]:Destroy(); Highlights[player] = nil end
             if Drawings[player] then
                 for _, l in pairs(Drawings[player].skel) do l.Visible = false end
-                Drawings[player].textWeap.Visible = false
-                Drawings[player].textHp.Visible = false
-                Drawings[player].textDist.Visible = false
+                Drawings[player].gui.Enabled = false
             end
         end
     end
