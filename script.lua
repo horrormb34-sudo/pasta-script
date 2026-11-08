@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Highlight + Skeleton + Weapon (FIX)*
+-- *PASTA: Fixed Full Menu*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,37 +8,23 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
-    SpeedEnabled = false,
-    SpeedValue = 50,
-    InfJump = false,
-    AimbotEnabled = false,
-    AimbotFOV = 150,
-    AimbotSmooth = 0.2,
-    
-    ESPEnabled = true,
-    ESPMaxDistance = 1000,
-    SkeletonESP = true,
-    WeaponESP = true,
-    
+    SpeedEnabled = false, SpeedValue = 50, InfJump = false,
+    AimbotEnabled = false, AimbotFOV = 150, AimbotSmooth = 0.2,
+    ESPEnabled = true, ESPMaxDistance = 1000,
+    SkeletonESP = true, WeaponESP = true, HealthESP = true, DistanceESP = true,
     ColorEnemy = Color3.fromRGB(255, 105, 180),
     ColorAlly = Color3.fromRGB(0, 255, 170),
     ColorSkeleton = Color3.fromRGB(255, 255, 255),
     ColorText = Color3.fromRGB(255, 240, 245),
-    
-    JitterEnabled = false,
-    MenuOpen = true,
+    JitterEnabled = false, MenuOpen = true,
     Keybind = Enum.KeyCode.RightShift,
     ColorAccent = Color3.fromRGB(255, 105, 180),
     ColorBg = Color3.fromRGB(30, 20, 25),
 }
 
-local Highlights = {}
-local Drawings = {}
+local Highlights, Drawings = {}, {}
 local FOVCircle = Drawing.new("Circle")
 
--- ==========================================
--- UI
--- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PastaUI"
 ScreenGui.ResetOnSpawn = false
@@ -48,7 +34,7 @@ local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Settings.ColorBg
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.Position = UDim2.new(0, 20, 0, 100)
-MainFrame.Size = UDim2.new(0, 400, 0, 400)
+MainFrame.Size = UDim2.new(0, 400, 0, 420)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -230,29 +216,20 @@ TabVisuals.MouseButton1Click:Connect(function() SelectTab(TabVisuals, PageVisual
 TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAim) end)
 SelectTab(TabVisuals, PageVisuals)
 
--- ==========================================
--- НАПОЛНЕНИЕ (Добавлены кнопки Скелет и Оружие)
--- ==========================================
--- MISC
+-- НАПОЛНЕНИЕ
 CreateToggle(PageMisc, "Speed Hack", false, function(s) Settings.SpeedEnabled = s end)
 CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s end)
 
--- AIM
 CreateToggle(PageAim, "Smooth Aimbot (RMB)", false, function(s) Settings.AimbotEnabled = s end)
-CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) 
-    Settings.AimbotFOV = val 
-    FOVCircle.Radius = val
-end)
+CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) Settings.AimbotFOV = val end)
 
--- VISUALS
 CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
-CreateToggle(PageVisuals, "Skeleton", true, function(s) Settings.SkeletonESP = s end) -- НОВОЕ
-CreateToggle(PageVisuals, "Weapon Text", true, function(s) Settings.WeaponESP = s end) -- НОВОЕ
-CreateSlider(PageVisuals, "Max Distance (m)", 50, 3000, Settings.ESPMaxDistance, function(val) 
-    Settings.ESPMaxDistance = val 
-end)
+CreateToggle(PageVisuals, "Skeleton", true, function(s) Settings.SkeletonESP = s end)
+CreateToggle(PageVisuals, "Weapon Text", true, function(s) Settings.WeaponESP = s end)
+CreateToggle(PageVisuals, "Health Bar", true, function(s) Settings.HealthESP = s end)
+CreateToggle(PageVisuals, "Distance", true, function(s) Settings.DistanceESP = s end)
+CreateSlider(PageVisuals, "Max Distance (m)", 50, 3000, Settings.ESPMaxDistance, function(val) Settings.ESPMaxDistance = val end)
 
--- ANTI-AIM
 CreateToggle(PageAntiAim, "Jitter", false, function(s) Settings.JitterEnabled = s end)
 
 local CloseBtn = Instance.new("TextButton", PageMisc)
@@ -282,27 +259,18 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
--- ==========================================
--- ЛОГИКА (Highlight + Drawing)
--- ==========================================
+-- ЛОГИКА
 local function GetClosestEnemy()
-    local closest = nil
-    local shortestDist = Settings.AimbotFOV
+    local closest, dist = nil, Settings.AimbotFOV
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     for _, player in pairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        if player.Team == LocalPlayer.Team and player.Team ~= nil then continue end
-        local char = player.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if player == LocalPlayer or (player.Team == LocalPlayer.Team and player.Team ~= nil) then continue end
+        local char = player.Character; local hum = char and char:FindFirstChild("Humanoid"); local root = char and char:FindFirstChild("HumanoidRootPart")
         if hum and hum.Health > 0 and root then
-            local pos, on_screen = Camera:WorldToViewportPoint(root.Position)
-            if on_screen then
-                local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                if dist < shortestDist then
-                    shortestDist = dist
-                    closest = char
-                end
+            local pos, on = Camera:WorldToViewportPoint(root.Position)
+            if on then
+                local d = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                if d < dist then dist = d; closest = char end
             end
         end
     end
@@ -310,42 +278,29 @@ local function GetClosestEnemy()
 end
 
 local function CreateDrawing()
-    local obj = {skel = {}, text = Drawing.new("Text")}
+    local obj = {skel = {}, textWeap = Drawing.new("Text"), textHp = Drawing.new("Text"), textDist = Drawing.new("Text")}
     for i = 1, 15 do
-        local line = Drawing.new("Line")
-        line.Thickness = 1.5
-        line.Visible = false
-        table.insert(obj.skel, line)
+        local l = Drawing.new("Line")
+        l.Thickness = 1.5; l.Visible = false
+        table.insert(obj.skel, l)
     end
-    obj.text.Size = 14
-    obj.text.Center = true
-    obj.text.Outline = true
-    obj.text.Visible = false
+    obj.textWeap.Size, obj.textWeap.Center, obj.textWeap.Outline, obj.textWeap.Visible = 14, true, true, false
+    obj.textHp.Size, obj.textHp.Center, obj.textHp.Outline, obj.textHp.Visible = 12, true, true, false
+    obj.textDist.Size, obj.textDist.Center, obj.textDist.Outline, obj.textDist.Visible = 12, true, true, false
     return obj
 end
 
 RunService.RenderStepped:Connect(function()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChild("Humanoid")
+    local char = LocalPlayer.Character; if not char then return end
+    local hrp, hum = char:FindFirstChild("HumanoidRootPart"), char:FindFirstChild("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
-    -- AIM
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    FOVCircle.Visible = Settings.AimbotEnabled
-    
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2); FOVCircle.Visible = Settings.AimbotEnabled
     if Settings.AimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local target = GetClosestEnemy()
-        if target then
-            local targetPart = target:FindFirstChild("Head") or target:FindFirstChild("HumanoidRootPart")
-            if targetPart then
-                Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), Settings.AimbotSmooth)
-            end
-        end
+        local t = GetClosestEnemy()
+        if t then local p = t:FindFirstChild("Head") or t:FindFirstChild("HumanoidRootPart"); if p then Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, p.Position), Settings.AimbotSmooth) end end
     end
 
-    -- VISUALS
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
@@ -353,11 +308,11 @@ RunService.RenderStepped:Connect(function()
         local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
         
         if not pChar or not pHum or pHum.Health <= 0 or not pRoot then
-            if Highlights[player] then Highlights[player]:Destroy() Highlights[player] = nil end
-            if Drawings[player] then
+            if Highlights[player] then Highlights[player]:Destroy(); Highlights[player] = nil end
+            if Drawings[player] then 
                 for _, l in pairs(Drawings[player].skel) do l:Remove() end
-                Drawings[player].text:Remove()
-                Drawings[player] = nil
+                Drawings[player].textWeap:Remove(); Drawings[player].textHp:Remove(); Drawings[player].textDist:Remove()
+                Drawings[player] = nil 
             end
             continue
         end
@@ -365,71 +320,83 @@ RunService.RenderStepped:Connect(function()
         local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
         
         if Settings.ESPEnabled and distMeters <= Settings.ESPMaxDistance then
-            -- 1. Подсветка
+            -- Подсветка
             if not Highlights[player] then
                 local hl = Instance.new("Highlight")
-                hl.Name = "PastaHighlight"
                 hl.Parent = pChar
                 Highlights[player] = hl
             end
-            local hl = Highlights[player]
             local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
-            hl.FillColor = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
-            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-            hl.FillTransparency = 0.5
-            hl.OutlineTransparency = 0.5
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            Highlights[player].FillColor = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
+            Highlights[player].OutlineColor = Color3.fromRGB(255, 255, 255)
+            Highlights[player].FillTransparency = 0.5
+            Highlights[player].OutlineTransparency = 0.5
+            Highlights[player].DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             
-            -- 2. Скелет и Оружие
-            if Settings.SkeletonESP or Settings.WeaponESP then
+            -- Текст и скелет
+            if Settings.SkeletonESP or Settings.WeaponESP or Settings.HealthESP or Settings.DistanceESP then
                 if not Drawings[player] then Drawings[player] = CreateDrawing() end
                 local esp = Drawings[player]
-                local pos, on_screen = Camera:WorldToViewportPoint(pRoot.Position)
+                local pos, on = Camera:WorldToViewportPoint(pRoot.Position)
                 
-                if on_screen then
+                if on then
                     if Settings.SkeletonESP then
                         local bones = {{"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"}, {"UpperTorso", "LeftUpperArm"}, {"UpperTorso", "RightUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"RightUpperArm", "RightLowerArm"}, {"LeftLowerArm", "LeftHand"}, {"RightLowerArm", "RightHand"}, {"LowerTorso", "LeftUpperLeg"}, {"LowerTorso", "RightUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}, {"RightLowerLeg", "RightFoot"}}
-                        local r6_bones = {{"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}}
-                        local boneList = (pChar:FindFirstChild("Torso") ~= nil) and r6_bones or bones
-                        
+                        local r6 = {{"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}}
+                        local bl = (pChar:FindFirstChild("Torso") ~= nil) and r6 or bones
                         for i = 1, 15 do
-                            local line = esp.skel[i]
-                            if i <= #boneList then
-                                local p1 = pChar:FindFirstChild(boneList[i][1])
-                                local p2 = pChar:FindFirstChild(boneList[i][2])
+                            local l = esp.skel[i]
+                            if i <= #bl then
+                                local p1, p2 = pChar:FindFirstChild(bl[i][1]), pChar:FindFirstChild(bl[i][2])
                                 if p1 and p2 then
                                     local p1Pos, on1 = Camera:WorldToViewportPoint(p1.Position)
                                     local p2Pos, on2 = Camera:WorldToViewportPoint(p2.Position)
                                     if on1 and on2 then
-                                        line.From = Vector2.new(p1Pos.X, p1Pos.Y)
-                                        line.To = Vector2.new(p2Pos.X, p2Pos.Y)
-                                        line.Color = Settings.ColorSkeleton
-                                        line.Visible = true
-                                    else line.Visible = false end
-                                else line.Visible = false end
-                            else line.Visible = false end
+                                        l.From = Vector2.new(p1Pos.X, p1Pos.Y)
+                                        l.To = Vector2.new(p2Pos.X, p2Pos.Y)
+                                        l.Color = Settings.ColorSkeleton
+                                        l.Visible = true
+                                    else l.Visible = false end
+                                else l.Visible = false end
+                            else l.Visible = false end
                         end
                     else for _, l in pairs(esp.skel) do l.Visible = false end end
                     
                     if Settings.WeaponESP then
                         local tool = pChar:FindFirstChildOfClass("Tool")
                         if tool then
-                            esp.text.Text = tool.Name
-                            esp.text.Position = Vector2.new(pos.X, pos.Y + (100 / pos.Z * 5) + 20)
-                            esp.text.Color = Settings.ColorText
-                            esp.text.Visible = true
-                        else esp.text.Visible = false end
-                    else esp.text.Visible = false end
+                            esp.textWeap.Text = tool.Name
+                            esp.textWeap.Position = Vector2.new(pos.X, pos.Y + (100 / pos.Z * 5) + 20)
+                            esp.textWeap.Color = Settings.ColorText
+                            esp.textWeap.Visible = true
+                        else esp.textWeap.Visible = false end
+                    else esp.textWeap.Visible = false end
+                    
+                    if Settings.HealthESP then
+                        esp.textHp.Text = "HP: " .. math.floor(pHum.Health)
+                        esp.textHp.Position = Vector2.new(pos.X, pos.Y - (100 / pos.Z * 5) - 20)
+                        esp.textHp.Color = Settings.ColorText
+                        esp.textHp.Visible = true
+                    else esp.textHp.Visible = false end
+                    
+                    if Settings.DistanceESP then
+                        esp.textDist.Text = "[" .. distMeters .. "m]"
+                        esp.textDist.Position = Vector2.new(pos.X, pos.Y - (100 / pos.Z * 5) - 35)
+                        esp.textDist.Color = Settings.ColorText
+                        esp.textDist.Visible = true
+                    else esp.textDist.Visible = false end
                 else
                     for _, l in pairs(esp.skel) do l.Visible = false end
-                    esp.text.Visible = false
+                    esp.textWeap.Visible = false; esp.textHp.Visible = false; esp.textDist.Visible = false
                 end
             end
         else
-            if Highlights[player] then Highlights[player]:Destroy() Highlights[player] = nil end
+            if Highlights[player] then Highlights[player]:Destroy(); Highlights[player] = nil end
             if Drawings[player] then
                 for _, l in pairs(Drawings[player].skel) do l.Visible = false end
-                Drawings[player].text.Visible = false
+                Drawings[player].textWeap.Visible = false
+                Drawings[player].textHp.Visible = false
+                Drawings[player].textDist.Visible = false
             end
         end
     end
