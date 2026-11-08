@@ -1,18 +1,18 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: No Spread / No Recoil + Box/Skeleton*
+-- *PASTA: Full Menu + Auto NoSpread/NoRecoil + Fullbright*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
 local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
     SpeedEnabled = false, SpeedValue = 50, InfJump = false,
+    FullbrightEnabled = false,
     AimbotEnabled = false, AimbotFOV = 150, AimbotSmooth = 0.2,
-    
-    NoSpread = false,
-    NoRecoil = false,
+    NoSpread = true, NoRecoil = true, -- ВКЛЮЧЕНО ПО УМОЛЧАНИЮ
     
     ESPEnabled = true, ESPMaxDistance = 1000,
     BoxESP = true, SkeletonESP = true, WeaponESP = true, HealthESP = true, DistanceESP = true,
@@ -31,6 +31,16 @@ local Settings = {
 local ESP_Objects = {}
 local FOVCircle = Drawing.new("Circle")
 local lastCamCF = Camera.CFrame
+local OriginalLighting = {}
+local isShooting = false
+
+-- Отслеживаем выстрел для NoSpread
+UserInputService.InputBegan:Connect(function(input, gp)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = true end
+end)
+UserInputService.InputEnded:Connect(function(input, gp)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = false end
+end)
 
 -- ==========================================
 -- UI
@@ -44,7 +54,7 @@ local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Settings.ColorBg
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.Position = UDim2.new(0, 20, 0, 100)
-MainFrame.Size = UDim2.new(0, 400, 0, 450)
+MainFrame.Size = UDim2.new(0, 400, 0, 480)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -224,18 +234,35 @@ TabMisc.MouseButton1Click:Connect(function() SelectTab(TabMisc, PageMisc) end)
 TabAim.MouseButton1Click:Connect(function() SelectTab(TabAim, PageAim) end)
 TabVisuals.MouseButton1Click:Connect(function() SelectTab(TabVisuals, PageVisuals) end)
 TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAim) end)
-SelectTab(TabAim, PageAim)
+SelectTab(TabVisuals, PageVisuals)
 
 CreateToggle(PageMisc, "Speed Hack", false, function(s) Settings.SpeedEnabled = s end)
 CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s end)
+CreateToggle(PageMisc, "Fullbright", false, function(s) 
+    Settings.FullbrightEnabled = s
+    if s then
+        OriginalLighting.Ambient = Lighting.Ambient
+        OriginalLighting.Brightness = Lighting.Brightness
+        OriginalLighting.ClockTime = Lighting.ClockTime
+        OriginalLighting.FogEnd = Lighting.FogEnd
+        Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+        Lighting.Brightness = 2
+        Lighting.ClockTime = 12
+        Lighting.FogEnd = 1000000
+        for _, v in pairs(Lighting:GetChildren()) do if v:IsA("Atmosphere") then v.Density = 0 end end
+    else
+        Lighting.Ambient = OriginalLighting.Ambient
+        Lighting.Brightness = OriginalLighting.Brightness
+        Lighting.ClockTime = OriginalLighting.ClockTime
+        Lighting.FogEnd = OriginalLighting.FogEnd
+    end
+end)
 
--- AIM
 CreateToggle(PageAim, "Smooth Aimbot (RMB)", false, function(s) Settings.AimbotEnabled = s end)
-CreateToggle(PageAim, "No Spread (Ровные пули)", false, function(s) Settings.NoSpread = s end) -- НОВОЕ
-CreateToggle(PageAim, "No Recoil (Без отдачи)", false, function(s) Settings.NoRecoil = s end) -- НОВОЕ
+CreateToggle(PageAim, "No Spread (Ровные пули)", true, function(s) Settings.NoSpread = s end)
+CreateToggle(PageAim, "No Recoil (Без отдачи)", true, function(s) Settings.NoRecoil = s end)
 CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) Settings.AimbotFOV = val end)
 
--- VISUALS
 CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
 CreateToggle(PageVisuals, "3D Box", true, function(s) Settings.BoxESP = s end)
 CreateToggle(PageVisuals, "Skeleton", true, function(s) Settings.SkeletonESP = s end)
@@ -266,6 +293,10 @@ CloseBtn.MouseButton1Click:Connect(function()
         if esp.textDist then esp.textDist:Remove() end
         if esp.textWeap then esp.textWeap:Remove() end
     end
+    Lighting.Ambient = OriginalLighting.Ambient
+    Lighting.Brightness = OriginalLighting.Brightness
+    Lighting.ClockTime = OriginalLighting.ClockTime
+    Lighting.FogEnd = OriginalLighting.FogEnd
     ScreenGui:Destroy()
 end)
 
@@ -313,7 +344,7 @@ local function CreateESP()
     return obj
 end
 
--- НУЛЕВАЯ ОТДАЧА
+-- Отдача
 RunService.RenderStepped:Connect(function()
     if Settings.NoRecoil then
         local currentCF = Camera.CFrame
@@ -327,24 +358,22 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- НУЛЕВОЙ СПРЕЙ
+-- Спред
 local oldNamecall
 oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()
-    
-    if Settings.NoSpread and (method == "FindPartOnRay" or method == "Raycast") then
+    if Settings.NoSpread and isShooting and (method == "FindPartOnRay" or method == "Raycast") then
         if not checkcaller() then
             local args = {...}
             local origin = Camera.CFrame.Position
             local direction = Camera.CFrame.LookVector * 1000
-            
-            if method == "FindPartOnRay" then
-                args[1] = Ray.new(origin, direction)
-            elseif method == "Raycast" then
-                args[1] = origin
-                args[2] = direction
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp and (origin - hrp.Position).Magnitude < 15 then
+                if method == "FindPartOnRay" then args[1] = Ray.new(origin, direction)
+                elseif method == "Raycast" then args[1] = origin; args[2] = direction end
+                return oldNamecall(self, unpack(args))
             end
-            return oldNamecall(self, unpack(args))
         end
     end
     return oldNamecall(self, ...)
@@ -394,7 +423,6 @@ RunService.RenderStepped:Connect(function()
                 local x, y = pos.X, pos.Y
                 local topY, botY = y - height, y + height
                 
-                -- 3D Бокс
                 if Settings.BoxESP then
                     local lines = {
                         {Vector2.new(x - width, topY), Vector2.new(x + width, topY)},
@@ -408,7 +436,6 @@ RunService.RenderStepped:Connect(function()
                     end
                 else for _, l in pairs(esp.box) do l.Visible = false end end
 
-                -- ХП Бар
                 if Settings.HealthESP then
                     local hpPerc = math.clamp(pHum.Health / pHum.MaxHealth, 0, 1)
                     esp.healthBg.From = Vector2.new(x - width - 5, topY); esp.healthBg.To = Vector2.new(x - width - 5, botY); esp.healthBg.Visible = true
@@ -416,7 +443,6 @@ RunService.RenderStepped:Connect(function()
                     esp.healthFill.Color = Color3.fromRGB(255 * (1 - hpPerc), 255 * hpPerc, 0); esp.healthFill.Visible = true
                 else esp.healthBg.Visible = false; esp.healthFill.Visible = false end
                 
-                -- Текст
                 if Settings.NameESP then esp.textName.Text = player.Name; esp.textName.Position = Vector2.new(x, topY - 18); esp.textName.Color = Settings.ColorText; esp.textName.Visible = true else esp.textName.Visible = false end
                 if Settings.DistanceESP then esp.textDist.Text = "[" .. distMeters .. "m]"; esp.textDist.Position = Vector2.new(x, botY + 5); esp.textDist.Color = Settings.ColorText; esp.textDist.Visible = true else esp.textDist.Visible = false end
                 if Settings.WeaponESP then
@@ -424,7 +450,6 @@ RunService.RenderStepped:Connect(function()
                     if tool then esp.textWeap.Text = tool.Name; esp.textWeap.Position = Vector2.new(x, botY + 20); esp.textWeap.Color = Settings.ColorText; esp.textWeap.Visible = true else esp.textWeap.Visible = false end
                 else esp.textWeap.Visible = false end
                 
-                -- Скелет
                 if Settings.SkeletonESP then
                     local bones = {{"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"}, {"UpperTorso", "LeftUpperArm"}, {"UpperTorso", "RightUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"RightUpperArm", "RightLowerArm"}, {"LeftLowerArm", "LeftHand"}, {"RightLowerArm", "RightHand"}, {"LowerTorso", "LeftUpperLeg"}, {"LowerTorso", "RightUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}, {"RightLowerLeg", "RightFoot"}}
                     local r6 = {{"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}}
