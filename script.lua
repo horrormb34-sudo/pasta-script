@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Human Bypass + Hitbox + Full Visuals*
+-- *PASTA: Safe Visuals + Aimbot (No Hooks)*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,44 +8,26 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
-    -- Bypass
-    BypassEnabled = true,
-    
-    -- Misc
-    SpeedEnabled = false,
-    SpeedValue = 50,
-    InfJump = false,
-    
-    -- Aim
-    AimbotEnabled = false,
-    SilentAimEnabled = false,
-    AimbotFOV = 150,
-    AimbotSmooth = 0.15, -- Плавность по умолчанию
-    HumanBypassAim = true, -- Плавность по умолчанию включена
-    
-    -- Hitbox
-    HitboxMode = "Head",
-    HitboxSize = 5,
-    
     -- Visuals
-    ESPEnabled = false,
+    ESPEnabled = true,
     BoxESP = true,
     SkeletonESP = true,
     NameESP = true,
     HealthESP = true,
     DistanceESP = true,
     WeaponESP = true,
-    ESPMaxDistance = 300,
+    
+    ESPMaxDistance = 1000, -- Метры
+    
+    -- Aim (Без хуков, только камера)
+    AimbotEnabled = false,
+    AimbotFOV = 150,
+    AimbotSmooth = 0.2,
     
     ColorBoxEnemy = Color3.fromRGB(255, 105, 180),
     ColorBoxAlly = Color3.fromRGB(255, 182, 193),
     ColorSkeleton = Color3.fromRGB(255, 255, 255),
     ColorText = Color3.fromRGB(255, 240, 245),
-    
-    -- Anti-Aim
-    SpinbotEnabled = false,
-    SpinSpeed = 40,
-    JitterEnabled = false,
     
     MenuOpen = true,
     Keybind = Enum.KeyCode.RightShift,
@@ -54,25 +36,6 @@ local Settings = {
 }
 
 local ESP_Objects = {}
-local FOVCircle = Drawing.new("Circle")
-local isShooting = false
-local OriginalSizes = {}
-local lastMoveTime = tick()
-
--- Отслеживаем выстрел
-UserInputService.InputBegan:Connect(function(input, gp)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = true end
-end)
-UserInputService.InputEnded:Connect(function(input, gp)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = false end
-end)
-
--- Отслеживаем движение для Anti-AFK
-UserInputService.InputChanged:Connect(function(input, gp)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.KeyCode then
-        lastMoveTime = tick()
-    end
-end)
 
 -- ==========================================
 -- UI
@@ -86,7 +49,7 @@ local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Settings.ColorBg
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.Position = UDim2.new(0, 20, 0, 100)
-MainFrame.Size = UDim2.new(0, 420, 0, 480)
+MainFrame.Size = UDim2.new(0, 380, 0, 320)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -179,37 +142,6 @@ local function CreateToggle(parent, name, defaultState, callback)
     end)
 end
 
-local function CreateDropdown(parent, name, options, default, callback)
-    local current = default
-    local Btn = Instance.new("TextButton", parent)
-    Btn.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
-    Btn.Size = UDim2.new(1, 0, 0, 30)
-    Btn.Text = ""
-    Btn.AutoButtonColor = false
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-    
-    local Label = Instance.new("TextLabel", Btn)
-    Label.BackgroundTransparency = 1
-    Label.Position = UDim2.new(0, 10, 0, 0)
-    Label.Size = UDim2.new(1, -40, 1, 0)
-    Label.Font = Enum.Font.Gotham
-    Label.Text = name .. ": " .. default
-    Label.TextColor3 = Color3.fromRGB(255, 240, 245)
-    Label.TextSize = 12
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-
-    local index = 1
-    for i, v in ipairs(options) do if v == default then index = i break end end
-
-    Btn.MouseButton1Click:Connect(function()
-        index = index + 1
-        if index > #options then index = 1 end
-        current = options[index]
-        Label.Text = name .. ": " .. current
-        callback(current)
-    end)
-end
-
 local function CreateSlider(parent, name, min, max, default, callback)
     local Frame = Instance.new("Frame", parent)
     Frame.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
@@ -273,12 +205,10 @@ local function CreatePage()
     return Page
 end
 
-local TabMisc = CreateTabButton("MISC", 1)
-local TabAim = CreateTabButton("AIM", 2)
-local TabVisuals = CreateTabButton("VISUALS", 3)
-local TabAntiAim = CreateTabButton("ANTI-AIM", 4)
+local TabAim = CreateTabButton("AIM", 1)
+local TabVisuals = CreateTabButton("VISUALS", 2)
 
-local PageMisc, PageAim, PageVisuals, PageAntiAim = CreatePage(), CreatePage(), CreatePage(), CreatePage()
+local PageAim, PageVisuals = CreatePage(), CreatePage()
 
 local function SelectTab(btn, page)
     for _, b in pairs(TabPanel:GetChildren()) do 
@@ -293,38 +223,21 @@ local function SelectTab(btn, page)
     page.Visible = true
 end
 
-TabMisc.MouseButton1Click:Connect(function() SelectTab(TabMisc, PageMisc) end)
 TabAim.MouseButton1Click:Connect(function() SelectTab(TabAim, PageAim) end)
 TabVisuals.MouseButton1Click:Connect(function() SelectTab(TabVisuals, PageVisuals) end)
-TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAim) end)
-SelectTab(TabMisc, PageMisc) -- Открываем MISC
+SelectTab(TabVisuals, PageVisuals) -- Сразу открываем Visuals
 
 -- ==========================================
 -- НАПОЛНЕНИЕ
 -- ==========================================
--- MISC
-CreateToggle(PageMisc, "Bypass (Anti-Detect)", true, function(s) Settings.BypassEnabled = s end)
-CreateToggle(PageMisc, "Speed Hack", false, function(s) Settings.SpeedEnabled = s end)
-CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s end)
-
 -- AIM
 CreateToggle(PageAim, "Smooth Aimbot (RMB)", false, function(s) Settings.AimbotEnabled = s end)
-CreateToggle(PageAim, "Human Smoothness", true, function(s) Settings.HumanBypassAim = s end) -- НОВОЕ
-CreateToggle(PageAim, "Silent Aim (Bow Fix)", false, function(s) Settings.SilentAimEnabled = s end)
-CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) 
-    Settings.AimbotFOV = val
-    FOVCircle.Radius = val
-end)
-
-CreateDropdown(PageAim, "Target Hitbox", {"Head", "Torso", "Custom"}, "Head", function(val)
-    Settings.HitboxMode = val
-end)
-CreateSlider(PageAim, "Custom Size", 1, 20, Settings.HitboxSize, function(val)
-    Settings.HitboxSize = val
+CreateSlider(PageAim, "Aimbot FOV", 50, 500, Settings.AimbotFOV, function(val) 
+    Settings.AimbotFOV = val 
 end)
 
 -- VISUALS
-CreateToggle(PageVisuals, "Wallhack (ESP)", false, function(s) Settings.ESPEnabled = s end)
+CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
 CreateToggle(PageVisuals, "Box", true, function(s) Settings.BoxESP = s end)
 CreateToggle(PageVisuals, "Skeleton", true, function(s) Settings.SkeletonESP = s end)
 CreateToggle(PageVisuals, "Name", true, function(s) Settings.NameESP = s end)
@@ -336,11 +249,7 @@ CreateSlider(PageVisuals, "Max Distance (m)", 50, 2000, Settings.ESPMaxDistance,
     Settings.ESPMaxDistance = val 
 end)
 
--- ANTI-AIM
-CreateToggle(PageAntiAim, "Spinbot", false, function(s) Settings.SpinbotEnabled = s end)
-CreateToggle(PageAntiAim, "Jitter", false, function(s) Settings.JitterEnabled = s end)
-
-local CloseBtn = Instance.new("TextButton", PageMisc)
+local CloseBtn = Instance.new("TextButton", PageVisuals)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 51, 102)
 CloseBtn.Size = UDim2.new(1, 0, 0, 30)
 CloseBtn.Text = "CLOSE SCRIPT (Unload)"
@@ -350,7 +259,6 @@ CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
 CloseBtn.MouseButton1Click:Connect(function()
-    FOVCircle:Remove()
     for _, esp in pairs(ESP_Objects) do
         if esp.box then for _, l in pairs(esp.box) do l:Remove() end end
         if esp.skel then for _, l in pairs(esp.skel) do l:Remove() end end
@@ -359,9 +267,6 @@ CloseBtn.MouseButton1Click:Connect(function()
         if esp.textDist then esp.textDist:Remove() end
         if esp.textWeap then esp.textWeap:Remove() end
         if esp.healthBar then esp.healthBar:Remove() end
-    end
-    for root, originalSize in pairs(OriginalSizes) do
-        if root and root.Parent then root.Size = originalSize end
     end
     ScreenGui:Destroy()
 end)
@@ -375,17 +280,8 @@ UserInputService.InputBegan:Connect(function(input, gp)
 end)
 
 -- ==========================================
--- ЛОГИКА
+-- ЛОГИКА (БЕЗ ОПАСНЫХ ХУКОВ)
 -- ==========================================
-local spinAngle = 0
-local jitterTick = 0
-
-FOVCircle.Thickness = 1
-FOVCircle.NumSides = 64
-FOVCircle.Radius = Settings.AimbotFOV
-FOVCircle.Color = Settings.ColorAccent
-FOVCircle.Filled = false
-
 local function GetClosestEnemy()
     local closest = nil
     local shortestDist = Settings.AimbotFOV
@@ -428,74 +324,25 @@ local function CreateESP()
     return obj
 end
 
-RunService.RenderStepped:Connect(function(dt)
+RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChild("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
-    -- BYPASS LOGIC
-    if Settings.BypassEnabled then
-        -- 1. Дрожание камеры при стрельбе
-        if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            Camera.CFrame = Camera.CFrame * CFrame.Angles(math.rad(math.random(-5, 5) / 100), math.rad(math.random(-5, 5) / 100), 0)
-        end
-        
-        -- 2. Anti-AFK (человеческое поведение при простое)
-        if tick() - lastMoveTime > 5 then -- Если стоим 5 секунд
-            if math.random(1, 100) <= 2 then -- 2% шанс каждый кадр
-                hum:Move(Vector3.new(math.random(-1, 1), 0, math.random(-1, 1)), false)
-                lastMoveTime = tick()
-            end
-        end
-    end
-
-    -- MISC
-    if Settings.SpeedEnabled then hum.WalkSpeed = Settings.SpeedValue end
-    if Settings.InfJump and UserInputService:IsKeyDown(Enum.KeyCode.Space) then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-
-    -- AIM
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    FOVCircle.Visible = Settings.AimbotEnabled
-    
-    if Settings.HitboxMode == "Custom" then
-        for _, player in pairs(Players:GetPlayers()) do
-            if player == LocalPlayer or (player.Team == LocalPlayer.Team and player.Team ~= nil) then continue end
-            local pChar = player.Character
-            if pChar and pChar:FindFirstChild("HumanoidRootPart") then
-                local root = pChar.HumanoidRootPart
-                if not OriginalSizes[root] then OriginalSizes[root] = root.Size end
-                root.Size = Vector3.new(Settings.HitboxSize, Settings.HitboxSize, Settings.HitboxSize)
-            end
-        end
-    else
-        for root, originalSize in pairs(OriginalSizes) do
-            if root and root.Parent then root.Size = originalSize end
-        end
-        OriginalSizes = {}
-    end
-
+    -- AIMBOT (Только камера, без хуков)
     if Settings.AimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local target = GetClosestEnemy()
         if target then
-            local targetPart
-            if Settings.HitboxMode == "Head" then targetPart = target:FindFirstChild("Head")
-            elseif Settings.HitboxMode == "Torso" then targetPart = target:FindFirstChild("UpperTorso") or target:FindFirstChild("Torso")
-            else targetPart = target:FindFirstChild("HumanoidRootPart") end
-            
+            local targetPart = target:FindFirstChild("Head") or target:FindFirstChild("HumanoidRootPart")
             if targetPart then
-                local smooth = Settings.AimbotSmooth
-                -- Human Bypass: имитация живой руки
-                if Settings.HumanBypassAim then 
-                    smooth = smooth * (1 + math.random(-20, 20) / 100) 
-                end
-                Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), math.clamp(smooth, 0.01, 1))
+                Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), Settings.AimbotSmooth)
             end
         end
     end
 
-    -- VISUALS
+    -- VISUALS (ИСПРАВЛЕННЫЙ ЦИКЛ)
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
@@ -512,6 +359,7 @@ RunService.RenderStepped:Connect(function(dt)
             continue
         end
         
+        -- Создаем объекты
         if not ESP_Objects[player] then ESP_Objects[player] = CreateESP() end
         
         local esp = ESP_Objects[player]
@@ -519,9 +367,9 @@ RunService.RenderStepped:Connect(function(dt)
         local boxColor = isEnemy and Settings.ColorBoxEnemy or Settings.ColorBoxAlly
         
         local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
-        local inRange = distMeters <= Settings.ESPMaxDistance
         
-        if Settings.ESPEnabled and inRange then
+        -- Проверяем дистанцию и включен ли ESP
+        if Settings.ESPEnabled and distMeters <= Settings.ESPMaxDistance then
             local pos, on_screen = Camera:WorldToViewportPoint(pRoot.Position)
             
             if on_screen then
@@ -530,28 +378,60 @@ RunService.RenderStepped:Connect(function(dt)
                 local x, y = pos.X, pos.Y
                 local topY, botY = y - height, y + height
                 
+                -- Бокс
                 if Settings.BoxESP then
-                    local lines = {{Vector2.new(x - width, topY), Vector2.new(x + width, topY)}, {Vector2.new(x + width, topY), Vector2.new(x + width, botY)}, {Vector2.new(x + width, botY), Vector2.new(x - width, botY)}, {Vector2.new(x - width, botY), Vector2.new(x - width, topY)}}
-                    for i, coords in ipairs(lines) do esp.box[i].From = coords[1]; esp.box[i].To = coords[2]; esp.box[i].Color = boxColor; esp.box[i].Visible = true end
+                    local lines = {
+                        {Vector2.new(x - width, topY), Vector2.new(x + width, topY)},
+                        {Vector2.new(x + width, topY), Vector2.new(x + width, botY)},
+                        {Vector2.new(x + width, botY), Vector2.new(x - width, botY)},
+                        {Vector2.new(x - width, botY), Vector2.new(x - width, topY)}
+                    }
+                    for i, coords in ipairs(lines) do
+                        esp.box[i].From = coords[1]; esp.box[i].To = coords[2]
+                        esp.box[i].Color = boxColor; esp.box[i].Visible = true
+                    end
                 else for _, l in pairs(esp.box) do l.Visible = false end end
 
+                -- Здоровье
                 if Settings.HealthESP then
                     local hpPerc = pHum.Health / pHum.MaxHealth
-                    esp.healthBar.From = Vector2.new(x - width - 5, topY + (height * 2 * (1 - hpPerc))); esp.healthBar.To = Vector2.new(x - width - 5, botY)
-                    esp.healthBar.Color = Color3.fromRGB(255 * (1 - hpPerc), 255 * hpPerc, 0); esp.healthBar.Visible = true
+                    esp.healthBar.From = Vector2.new(x - width - 5, topY + (height * 2 * (1 - hpPerc)))
+                    esp.healthBar.To = Vector2.new(x - width - 5, botY)
+                    esp.healthBar.Color = Color3.fromRGB(255 * (1 - hpPerc), 255 * hpPerc, 0)
+                    esp.healthBar.Visible = true
                 else esp.healthBar.Visible = false end
                 
-                if Settings.NameESP then esp.textName.Text = player.Name; esp.textName.Position = Vector2.new(x, topY - 18); esp.textName.Color = Settings.ColorText; esp.textName.Visible = true else esp.textName.Visible = false end
-                if Settings.DistanceESP then esp.textDist.Text = "[" .. distMeters .. "m]"; esp.textDist.Position = Vector2.new(x, botY + 5); esp.textDist.Color = Settings.ColorText; esp.textDist.Visible = true else esp.textDist.Visible = false end
+                -- Текст (Имя, Дистанция, Оружие)
+                if Settings.NameESP then 
+                    esp.textName.Text = player.Name
+                    esp.textName.Position = Vector2.new(x, topY - 18)
+                    esp.textName.Color = Settings.ColorText
+                    esp.textName.Visible = true 
+                else esp.textName.Visible = false end
+                
+                if Settings.DistanceESP then 
+                    esp.textDist.Text = "[" .. distMeters .. "m]"
+                    esp.textDist.Position = Vector2.new(x, botY + 5)
+                    esp.textDist.Color = Settings.ColorText
+                    esp.textDist.Visible = true 
+                else esp.textDist.Visible = false end
+                
                 if Settings.WeaponESP then
                     local tool = pChar:FindFirstChildOfClass("Tool")
-                    if tool then esp.textWeap.Text = tool.Name; esp.textWeap.Position = Vector2.new(x, botY + 20); esp.textWeap.Color = Settings.ColorText; esp.textWeap.Visible = true else esp.textWeap.Visible = false end
+                    if tool then 
+                        esp.textWeap.Text = tool.Name
+                        esp.textWeap.Position = Vector2.new(x, botY + 20)
+                        esp.textWeap.Color = Settings.ColorText
+                        esp.textWeap.Visible = true 
+                    else esp.textWeap.Visible = false end
                 else esp.textWeap.Visible = false end
             else
+                -- Если не на экране
                 for _, l in pairs(esp.box) do l.Visible = false end
                 esp.healthBar.Visible = false; esp.textName.Visible = false; esp.textDist.Visible = false; esp.textWeap.Visible = false
             end
             
+            -- Скелет
             if Settings.SkeletonESP then
                 local bones = {{"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"}, {"UpperTorso", "LeftUpperArm"}, {"UpperTorso", "RightUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"RightUpperArm", "RightLowerArm"}, {"LeftLowerArm", "LeftHand"}, {"RightLowerArm", "RightHand"}, {"LowerTorso", "LeftUpperLeg"}, {"LowerTorso", "RightUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}, {"RightLowerLeg", "RightFoot"}}
                 local r6_bones = {{"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}}
@@ -563,61 +443,19 @@ RunService.RenderStepped:Connect(function(dt)
                         local p1 = pChar:FindFirstChild(boneList[i][1]); local p2 = pChar:FindFirstChild(boneList[i][2])
                         if p1 and p2 then
                             local p1Pos, on1 = Camera:WorldToViewportPoint(p1.Position); local p2Pos, on2 = Camera:WorldToViewportPoint(p2.Position)
-                            if on1 and on2 then line.From = Vector2.new(p1Pos.X, p1Pos.Y); line.To = Vector2.new(p2Pos.X, p2Pos.Y); line.Color = Settings.ColorSkeleton; line.Visible = true else line.Visible = false end
+                            if on1 and on2 then 
+                                line.From = Vector2.new(p1Pos.X, p1Pos.Y); line.To = Vector2.new(p2Pos.X, p2Pos.Y)
+                                line.Color = Settings.ColorSkeleton; line.Visible = true 
+                            else line.Visible = false end
                         else line.Visible = false end
                     else line.Visible = false end
                 end
             else for _, l in pairs(esp.skel) do l.Visible = false end end
         else
+            -- Если выключено или далеко
             for _, l in pairs(esp.box) do l.Visible = false end
             for _, l in pairs(esp.skel) do l.Visible = false end
             esp.healthBar.Visible = false; esp.textName.Visible = false; esp.textDist.Visible = false; esp.textWeap.Visible = false
         end
     end
-
-    -- ANTI-AIM
-    if Settings.SpinbotEnabled then
-        local currentSpeed = Settings.SpinSpeed
-        if Settings.BypassEnabled then currentSpeed = currentSpeed + math.random(-5, 5) end
-        spinAngle = spinAngle + math.rad(currentSpeed)
-        if spinAngle > math.rad(360) then spinAngle = spinAngle - math.rad(360) end
-        local currentYaw = math.atan2(-hrp.CFrame.LookVector.X, -hrp.CFrame.LookVector.Z)
-        hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, currentYaw + math.rad(currentSpeed), 0)
-    elseif Settings.JitterEnabled then
-        jitterTick = jitterTick + 1
-        if jitterTick % 2 == 0 then
-            local currentYaw = math.atan2(-hrp.CFrame.LookVector.X, -hrp.CFrame.LookVector.Z)
-            hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, currentYaw + math.rad(90), 0)
-        else
-            local currentYaw = math.atan2(-hrp.CFrame.LookVector.X, -hrp.CFrame.LookVector.Z)
-            hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, currentYaw - math.rad(90), 0)
-        end
-    end
-end)
-
--- SILENT AIM
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    if Settings.SilentAimEnabled and isShooting and (method == "FindPartOnRay" or method == "Raycast") then
-        if not checkcaller() then
-            local target = GetClosestEnemy()
-            if target then
-                local targetPart
-                if Settings.HitboxMode == "Head" then targetPart = target:FindFirstChild("Head")
-                elseif Settings.HitboxMode == "Torso" then targetPart = target:FindFirstChild("UpperTorso") or target:FindFirstChild("Torso")
-                else targetPart = target:FindFirstChild("HumanoidRootPart") end
-                
-                if targetPart then
-                    local args = {...}
-                    local origin = Camera.CFrame.Position
-                    local direction = (targetPart.Position - origin).Unit * 1000
-                    if method == "FindPartOnRay" then args[1] = Ray.new(origin, direction)
-                    elseif method == "Raycast" then args[1] = origin; args[2] = direction end
-                    return oldNamecall(self, unpack(args))
-                end
-            end
-        end
-    end
-    return oldNamecall(self, ...)
 end)
