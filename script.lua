@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Full Menu + Dynamic Distance*
+-- *PASTA: Full Menu + Highlight Visuals*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,41 +8,27 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
-    -- Misc
     SpeedEnabled = false,
     SpeedValue = 50,
     InfJump = false,
-    
-    -- Aim
     AimbotEnabled = false,
     AimbotFOV = 150,
     AimbotSmooth = 0.2,
     
-    -- Visuals
     ESPEnabled = true,
-    BoxESP = true,
-    SkeletonESP = true,
-    NameESP = true,
-    HealthESP = true,
-    DistanceESP = true,
-    WeaponESP = true,
-    ESPMaxDistance = 1000, -- Меняется ползунком
+    ESPMaxDistance = 1000,
     
-    ColorBoxEnemy = Color3.fromRGB(255, 105, 180),
-    ColorBoxAlly = Color3.fromRGB(255, 182, 193),
-    ColorSkeleton = Color3.fromRGB(255, 255, 255),
-    ColorText = Color3.fromRGB(255, 240, 245),
+    ColorEnemy = Color3.fromRGB(255, 105, 180),
+    ColorAlly = Color3.fromRGB(0, 255, 170),
     
-    -- Anti-Aim
     JitterEnabled = false,
-    
     MenuOpen = true,
     Keybind = Enum.KeyCode.RightShift,
     ColorAccent = Color3.fromRGB(255, 105, 180),
     ColorBg = Color3.fromRGB(30, 20, 25),
 }
 
-local ESP_Objects = {}
+local Highlights = {}
 local FOVCircle = Drawing.new("Circle")
 
 -- ==========================================
@@ -255,14 +241,6 @@ end)
 
 -- VISUALS
 CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
-CreateToggle(PageVisuals, "Box", true, function(s) Settings.BoxESP = s end)
-CreateToggle(PageVisuals, "Skeleton", true, function(s) Settings.SkeletonESP = s end)
-CreateToggle(PageVisuals, "Name", true, function(s) Settings.NameESP = s end)
-CreateToggle(PageVisuals, "Health Bar", true, function(s) Settings.HealthESP = s end)
-CreateToggle(PageVisuals, "Distance (m)", true, function(s) Settings.DistanceESP = s end)
-CreateToggle(PageVisuals, "Weapon", true, function(s) Settings.WeaponESP = s end)
-
--- ПОЛЗУНОК ДЛЯ ДАЛЬНОСТИ
 CreateSlider(PageVisuals, "Max Distance (m)", 50, 3000, Settings.ESPMaxDistance, function(val) 
     Settings.ESPMaxDistance = val 
 end)
@@ -281,14 +259,8 @@ Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
 CloseBtn.MouseButton1Click:Connect(function()
     FOVCircle:Remove()
-    for _, esp in pairs(ESP_Objects) do
-        if esp.box then for _, l in pairs(esp.box) do l:Remove() end end
-        if esp.skel then for _, l in pairs(esp.skel) do l:Remove() end end
-        if esp.textName then esp.textName:Remove() end
-        if esp.textHealth then esp.textHealth:Remove() end
-        if esp.textDist then esp.textDist:Remove() end
-        if esp.textWeap then esp.textWeap:Remove() end
-        if esp.healthBar then esp.healthBar:Remove() end
+    for _, hl in pairs(Highlights) do
+        if hl and hl.Parent then hl:Destroy() end
     end
     ScreenGui:Destroy()
 end)
@@ -302,7 +274,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
 end)
 
 -- ==========================================
--- ЛОГИКА
+-- ЛОГИКА (Highlight)
 -- ==========================================
 local function GetClosestEnemy()
     local closest = nil
@@ -331,23 +303,6 @@ local function GetClosestEnemy()
     return closest
 end
 
-local function CreateESP()
-    local obj = {box = {}, skel = {}, healthBar = Drawing.new("Line"), textName = Drawing.new("Text"), textDist = Drawing.new("Text"), textWeap = Drawing.new("Text")}
-    for i = 1, 4 do
-        local line = Drawing.new("Line")
-        line.Thickness = 1.5; line.Visible = false; table.insert(obj.box, line)
-    end
-    for i = 1, 15 do
-        local line = Drawing.new("Line")
-        line.Thickness = 1; line.Visible = false; table.insert(obj.skel, line)
-    end
-    obj.healthBar.Thickness = 2; obj.healthBar.Visible = false
-    obj.textName.Size = 14; obj.textName.Center = true; obj.textName.Outline = true; obj.textName.Visible = false
-    obj.textDist.Size = 12; obj.textDist.Center = true; obj.textDist.Outline = true; obj.textDist.Visible = false
-    obj.textWeap.Size = 12; obj.textWeap.Center = true; obj.textWeap.Outline = true; obj.textWeap.Visible = false
-    return obj
-end
-
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
@@ -369,7 +324,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- VISUALS
+    -- VISUALS (Highlight)
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
@@ -377,11 +332,9 @@ RunService.RenderStepped:Connect(function()
         local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
         
         if not pChar or not pHum or pHum.Health <= 0 or not pRoot then
-            if ESP_Objects[player] then
-                for _, l in pairs(ESP_Objects[player].box) do l:Remove() end
-                for _, l in pairs(ESP_Objects[player].skel) do l:Remove() end
-                ESP_Objects[player].healthBar:Remove(); ESP_Objects[player].textName:Remove(); ESP_Objects[player].textDist:Remove(); ESP_Objects[player].textWeap:Remove()
-                ESP_Objects[player] = nil
+            if Highlights[player] then
+                Highlights[player]:Destroy()
+                Highlights[player] = nil
             end
             continue
         end
@@ -389,106 +342,24 @@ RunService.RenderStepped:Connect(function()
         local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
         
         if Settings.ESPEnabled and distMeters <= Settings.ESPMaxDistance then
-            if not ESP_Objects[player] then ESP_Objects[player] = CreateESP() end
-            
-            local esp = ESP_Objects[player]
-            local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
-            local boxColor = isEnemy and Settings.ColorBoxEnemy or Settings.ColorBoxAlly
-            
-            local pos, on_screen = Camera:WorldToViewportPoint(pRoot.Position)
-            
-            if on_screen then
-                local height = 100 / pos.Z * 5
-                local width = height / 2
-                local x, y = pos.X, pos.Y
-                local topY, botY = y - height, y + height
-                
-                if Settings.BoxESP then
-                    local lines = {
-                        {Vector2.new(x - width, topY), Vector2.new(x + width, topY)},
-                        {Vector2.new(x + width, topY), Vector2.new(x + width, botY)},
-                        {Vector2.new(x + width, botY), Vector2.new(x - width, botY)},
-                        {Vector2.new(x - width, botY), Vector2.new(x - width, topY)}
-                    }
-                    for i, coords in ipairs(lines) do
-                        esp.box[i].From = coords[1]
-                        esp.box[i].To = coords[2]
-                        esp.box[i].Color = boxColor
-                        esp.box[i].Visible = true
-                    end
-                else for _, l in pairs(esp.box) do l.Visible = false end end
-
-                if Settings.HealthESP then
-                    local hpPerc = pHum.Health / pHum.MaxHealth
-                    esp.healthBar.From = Vector2.new(x - width - 5, topY + (height * 2 * (1 - hpPerc)))
-                    esp.healthBar.To = Vector2.new(x - width - 5, botY)
-                    esp.healthBar.Color = Color3.fromRGB(255 * (1 - hpPerc), 255 * hpPerc, 0)
-                    esp.healthBar.Visible = true
-                else esp.healthBar.Visible = false end
-                
-                if Settings.NameESP then
-                    esp.textName.Text = player.Name
-                    esp.textName.Position = Vector2.new(x, topY - 18)
-                    esp.textName.Color = Settings.ColorText
-                    esp.textName.Visible = true
-                else esp.textName.Visible = false end
-                
-                if Settings.DistanceESP then
-                    esp.textDist.Text = "[" .. distMeters .. "m]"
-                    esp.textDist.Position = Vector2.new(x, botY + 5)
-                    esp.textDist.Color = Settings.ColorText
-                    esp.textDist.Visible = true
-                else esp.textDist.Visible = false end
-                
-                if Settings.WeaponESP then
-                    local tool = pChar:FindFirstChildOfClass("Tool")
-                    if tool then
-                        esp.textWeap.Text = tool.Name
-                        esp.textWeap.Position = Vector2.new(x, botY + 20)
-                        esp.textWeap.Color = Settings.ColorText
-                        esp.textWeap.Visible = true
-                    else esp.textWeap.Visible = false end
-                else esp.textWeap.Visible = false end
-                
-                if Settings.SkeletonESP then
-                    local bones = {{"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"}, {"UpperTorso", "LeftUpperArm"}, {"UpperTorso", "RightUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"RightUpperArm", "RightLowerArm"}, {"LeftLowerArm", "LeftHand"}, {"RightLowerArm", "RightHand"}, {"LowerTorso", "LeftUpperLeg"}, {"LowerTorso", "RightUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}, {"RightLowerLeg", "RightFoot"}}
-                    local r6_bones = {{"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}}
-                    local boneList = (pChar:FindFirstChild("Torso") ~= nil) and r6_bones or bones
-                    
-                    for i = 1, 15 do
-                        local line = esp.skel[i]
-                        if i <= #boneList then
-                            local p1 = pChar:FindFirstChild(boneList[i][1])
-                            local p2 = pChar:FindFirstChild(boneList[i][2])
-                            if p1 and p2 then
-                                local p1Pos, on1 = Camera:WorldToViewportPoint(p1.Position)
-                                local p2Pos, on2 = Camera:WorldToViewportPoint(p2.Position)
-                                if on1 and on2 then
-                                    line.From = Vector2.new(p1Pos.X, p1Pos.Y)
-                                    line.To = Vector2.new(p2Pos.X, p2Pos.Y)
-                                    line.Color = Settings.ColorSkeleton
-                                    line.Visible = true
-                                else line.Visible = false end
-                            else line.Visible = false end
-                        else line.Visible = false end
-                    end
-                else for _, l in pairs(esp.skel) do l.Visible = false end end
-            else
-                for _, l in pairs(esp.box) do l.Visible = false end
-                for _, l in pairs(esp.skel) do l.Visible = false end
-                esp.healthBar.Visible = false
-                esp.textName.Visible = false
-                esp.textDist.Visible = false
-                esp.textWeap.Visible = false
+            if not Highlights[player] then
+                local hl = Instance.new("Highlight")
+                hl.Name = "PastaHighlight"
+                hl.Parent = pChar
+                Highlights[player] = hl
             end
+            
+            local hl = Highlights[player]
+            local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
+            hl.FillColor = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.FillTransparency = 0.5
+            hl.OutlineTransparency = 0.5
+            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         else
-            if ESP_Objects[player] then
-                for _, l in pairs(ESP_Objects[player].box) do l.Visible = false end
-                for _, l in pairs(ESP_Objects[player].skel) do l.Visible = false end
-                ESP_Objects[player].healthBar.Visible = false
-                ESP_Objects[player].textName.Visible = false
-                ESP_Objects[player].textDist.Visible = false
-                ESP_Objects[player].textWeap.Visible = false
+            if Highlights[player] then
+                Highlights[player]:Destroy()
+                Highlights[player] = nil
             end
         end
     end
