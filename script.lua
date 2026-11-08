@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Bypass + Hitbox Expander + Dynamic Max Distance*
+-- *PASTA: Human Bypass + Hitbox + Full Visuals*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -20,7 +20,8 @@ local Settings = {
     AimbotEnabled = false,
     SilentAimEnabled = false,
     AimbotFOV = 150,
-    AimbotSmooth = 0.2,
+    AimbotSmooth = 0.15, -- Плавность по умолчанию
+    HumanBypassAim = true, -- Плавность по умолчанию включена
     
     -- Hitbox
     HitboxMode = "Head",
@@ -34,8 +35,7 @@ local Settings = {
     HealthESP = true,
     DistanceESP = true,
     WeaponESP = true,
-    
-    ESPMaxDistance = 300, -- Максимальная дистанция ВХ (в метрах)
+    ESPMaxDistance = 300,
     
     ColorBoxEnemy = Color3.fromRGB(255, 105, 180),
     ColorBoxAlly = Color3.fromRGB(255, 182, 193),
@@ -57,6 +57,7 @@ local ESP_Objects = {}
 local FOVCircle = Drawing.new("Circle")
 local isShooting = false
 local OriginalSizes = {}
+local lastMoveTime = tick()
 
 -- Отслеживаем выстрел
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -64,6 +65,13 @@ UserInputService.InputBegan:Connect(function(input, gp)
 end)
 UserInputService.InputEnded:Connect(function(input, gp)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = false end
+end)
+
+-- Отслеживаем движение для Anti-AFK
+UserInputService.InputChanged:Connect(function(input, gp)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.KeyCode then
+        lastMoveTime = tick()
+    end
 end)
 
 -- ==========================================
@@ -78,7 +86,7 @@ local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Settings.ColorBg
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.Position = UDim2.new(0, 20, 0, 100)
-MainFrame.Size = UDim2.new(0, 420, 0, 450) -- Увеличили высоту
+MainFrame.Size = UDim2.new(0, 420, 0, 480)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -289,7 +297,7 @@ TabMisc.MouseButton1Click:Connect(function() SelectTab(TabMisc, PageMisc) end)
 TabAim.MouseButton1Click:Connect(function() SelectTab(TabAim, PageAim) end)
 TabVisuals.MouseButton1Click:Connect(function() SelectTab(TabVisuals, PageVisuals) end)
 TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAim) end)
-SelectTab(TabVisuals, PageVisuals) -- Открываем VISUALS
+SelectTab(TabMisc, PageMisc) -- Открываем MISC
 
 -- ==========================================
 -- НАПОЛНЕНИЕ
@@ -301,6 +309,7 @@ CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s 
 
 -- AIM
 CreateToggle(PageAim, "Smooth Aimbot (RMB)", false, function(s) Settings.AimbotEnabled = s end)
+CreateToggle(PageAim, "Human Smoothness", true, function(s) Settings.HumanBypassAim = s end) -- НОВОЕ
 CreateToggle(PageAim, "Silent Aim (Bow Fix)", false, function(s) Settings.SilentAimEnabled = s end)
 CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) 
     Settings.AimbotFOV = val
@@ -323,7 +332,6 @@ CreateToggle(PageVisuals, "Health Bar", true, function(s) Settings.HealthESP = s
 CreateToggle(PageVisuals, "Distance (m)", true, function(s) Settings.DistanceESP = s end)
 CreateToggle(PageVisuals, "Weapon", true, function(s) Settings.WeaponESP = s end)
 
--- ПОЛЗУНОК ДЛЯ ДИСТАНЦИИ ВХ
 CreateSlider(PageVisuals, "Max Distance (m)", 50, 2000, Settings.ESPMaxDistance, function(val) 
     Settings.ESPMaxDistance = val 
 end)
@@ -420,17 +428,26 @@ local function CreateESP()
     return obj
 end
 
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(dt)
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChild("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
-    -- BYPASS
+    -- BYPASS LOGIC
     if Settings.BypassEnabled then
+        -- 1. Дрожание камеры при стрельбе
         if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            Camera.CFrame = Camera.CFrame * CFrame.Angles(math.rad(math.random(-10, 10) / 100), math.rad(math.random(-10, 10) / 100), 0)
+            Camera.CFrame = Camera.CFrame * CFrame.Angles(math.rad(math.random(-5, 5) / 100), math.rad(math.random(-5, 5) / 100), 0)
+        end
+        
+        -- 2. Anti-AFK (человеческое поведение при простое)
+        if tick() - lastMoveTime > 5 then -- Если стоим 5 секунд
+            if math.random(1, 100) <= 2 then -- 2% шанс каждый кадр
+                hum:Move(Vector3.new(math.random(-1, 1), 0, math.random(-1, 1)), false)
+                lastMoveTime = tick()
+            end
         end
     end
 
@@ -469,13 +486,16 @@ RunService.RenderStepped:Connect(function()
             
             if targetPart then
                 local smooth = Settings.AimbotSmooth
-                if Settings.BypassEnabled then smooth = smooth + math.random(-5, 5) / 100 end
+                -- Human Bypass: имитация живой руки
+                if Settings.HumanBypassAim then 
+                    smooth = smooth * (1 + math.random(-20, 20) / 100) 
+                end
                 Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, targetPart.Position), math.clamp(smooth, 0.01, 1))
             end
         end
     end
 
-    -- VISUALS (С ДИНАМИЧЕСКОЙ ДИСТАНЦИЕЙ)
+    -- VISUALS
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
@@ -498,9 +518,8 @@ RunService.RenderStepped:Connect(function()
         local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
         local boxColor = isEnemy and Settings.ColorBoxEnemy or Settings.ColorBoxAlly
         
-        -- ВЫЧИСЛЯЕМ ДИСТАНЦИЮ ДО ИГРОКА
         local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
-        local inRange = distMeters <= Settings.ESPMaxDistance -- Проверка на лимит
+        local inRange = distMeters <= Settings.ESPMaxDistance
         
         if Settings.ESPEnabled and inRange then
             local pos, on_screen = Camera:WorldToViewportPoint(pRoot.Position)
@@ -550,7 +569,6 @@ RunService.RenderStepped:Connect(function()
                 end
             else for _, l in pairs(esp.skel) do l.Visible = false end end
         else
-            -- Если выключено или игрок ВНЕ дистанции, скрываем все элементы
             for _, l in pairs(esp.box) do l.Visible = false end
             for _, l in pairs(esp.skel) do l.Visible = false end
             esp.healthBar.Visible = false; esp.textName.Visible = false; esp.textDist.Visible = false; esp.textWeap.Visible = false
