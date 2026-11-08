@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Highlight + Skeleton + Weapon*
+-- *PASTA: Highlight + Skeleton + Weapon (FIX)*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -48,7 +48,7 @@ local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Settings.ColorBg
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.Position = UDim2.new(0, 20, 0, 100)
-MainFrame.Size = UDim2.new(0, 400, 0, 380)
+MainFrame.Size = UDim2.new(0, 400, 0, 400)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -231,7 +231,7 @@ TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAi
 SelectTab(TabVisuals, PageVisuals)
 
 -- ==========================================
--- НАПОЛНЕНИЕ
+-- НАПОЛНЕНИЕ (Добавлены кнопки Скелет и Оружие)
 -- ==========================================
 -- MISC
 CreateToggle(PageMisc, "Speed Hack", false, function(s) Settings.SpeedEnabled = s end)
@@ -246,8 +246,8 @@ end)
 
 -- VISUALS
 CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
-CreateToggle(PageVisuals, "Skeleton", true, function(s) Settings.SkeletonESP = s end)
-CreateToggle(PageVisuals, "Weapon Text", true, function(s) Settings.WeaponESP = s end)
+CreateToggle(PageVisuals, "Skeleton", true, function(s) Settings.SkeletonESP = s end) -- НОВОЕ
+CreateToggle(PageVisuals, "Weapon Text", true, function(s) Settings.WeaponESP = s end) -- НОВОЕ
 CreateSlider(PageVisuals, "Max Distance (m)", 50, 3000, Settings.ESPMaxDistance, function(val) 
     Settings.ESPMaxDistance = val 
 end)
@@ -283,7 +283,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
 end)
 
 -- ==========================================
--- ЛОГИКА
+-- ЛОГИКА (Highlight + Drawing)
 -- ==========================================
 local function GetClosestEnemy()
     local closest = nil
@@ -345,7 +345,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- VISUALS (Highlight + Drawing)
+    -- VISUALS
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
@@ -365,7 +365,7 @@ RunService.RenderStepped:Connect(function()
         local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
         
         if Settings.ESPEnabled and distMeters <= Settings.ESPMaxDistance then
-            -- 1. Подсветка (Highlight)
+            -- 1. Подсветка
             if not Highlights[player] then
                 local hl = Instance.new("Highlight")
                 hl.Name = "PastaHighlight"
@@ -380,7 +380,7 @@ RunService.RenderStepped:Connect(function()
             hl.OutlineTransparency = 0.5
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             
-            -- 2. Скелет и Оружие (Drawing)
+            -- 2. Скелет и Оружие
             if Settings.SkeletonESP or Settings.WeaponESP then
                 if not Drawings[player] then Drawings[player] = CreateDrawing() end
                 local esp = Drawings[player]
