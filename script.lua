@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Full Menu + Highlight Visuals*
+-- *PASTA: Highlight + Skeleton + Weapon*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -17,9 +17,13 @@ local Settings = {
     
     ESPEnabled = true,
     ESPMaxDistance = 1000,
+    SkeletonESP = true,
+    WeaponESP = true,
     
     ColorEnemy = Color3.fromRGB(255, 105, 180),
     ColorAlly = Color3.fromRGB(0, 255, 170),
+    ColorSkeleton = Color3.fromRGB(255, 255, 255),
+    ColorText = Color3.fromRGB(255, 240, 245),
     
     JitterEnabled = false,
     MenuOpen = true,
@@ -29,6 +33,7 @@ local Settings = {
 }
 
 local Highlights = {}
+local Drawings = {}
 local FOVCircle = Drawing.new("Circle")
 
 -- ==========================================
@@ -241,6 +246,8 @@ end)
 
 -- VISUALS
 CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
+CreateToggle(PageVisuals, "Skeleton", true, function(s) Settings.SkeletonESP = s end)
+CreateToggle(PageVisuals, "Weapon Text", true, function(s) Settings.WeaponESP = s end)
 CreateSlider(PageVisuals, "Max Distance (m)", 50, 3000, Settings.ESPMaxDistance, function(val) 
     Settings.ESPMaxDistance = val 
 end)
@@ -259,8 +266,10 @@ Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
 CloseBtn.MouseButton1Click:Connect(function()
     FOVCircle:Remove()
-    for _, hl in pairs(Highlights) do
-        if hl and hl.Parent then hl:Destroy() end
+    for _, hl in pairs(Highlights) do if hl and hl.Parent then hl:Destroy() end end
+    for _, draw in pairs(Drawings) do
+        if draw.skel then for _, l in pairs(draw.skel) do l:Remove() end end
+        if draw.text then draw.text:Remove() end
     end
     ScreenGui:Destroy()
 end)
@@ -274,21 +283,18 @@ UserInputService.InputBegan:Connect(function(input, gp)
 end)
 
 -- ==========================================
--- ЛОГИКА (Highlight)
+-- ЛОГИКА
 -- ==========================================
 local function GetClosestEnemy()
     local closest = nil
     local shortestDist = Settings.AimbotFOV
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         if player.Team == LocalPlayer.Team and player.Team ~= nil then continue end
-        
         local char = player.Character
         local hum = char and char:FindFirstChild("Humanoid")
         local root = char and char:FindFirstChild("HumanoidRootPart")
-        
         if hum and hum.Health > 0 and root then
             local pos, on_screen = Camera:WorldToViewportPoint(root.Position)
             if on_screen then
@@ -301,6 +307,21 @@ local function GetClosestEnemy()
         end
     end
     return closest
+end
+
+local function CreateDrawing()
+    local obj = {skel = {}, text = Drawing.new("Text")}
+    for i = 1, 15 do
+        local line = Drawing.new("Line")
+        line.Thickness = 1.5
+        line.Visible = false
+        table.insert(obj.skel, line)
+    end
+    obj.text.Size = 14
+    obj.text.Center = true
+    obj.text.Outline = true
+    obj.text.Visible = false
+    return obj
 end
 
 RunService.RenderStepped:Connect(function()
@@ -324,7 +345,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- VISUALS (Highlight)
+    -- VISUALS (Highlight + Drawing)
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
@@ -332,9 +353,11 @@ RunService.RenderStepped:Connect(function()
         local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
         
         if not pChar or not pHum or pHum.Health <= 0 or not pRoot then
-            if Highlights[player] then
-                Highlights[player]:Destroy()
-                Highlights[player] = nil
+            if Highlights[player] then Highlights[player]:Destroy() Highlights[player] = nil end
+            if Drawings[player] then
+                for _, l in pairs(Drawings[player].skel) do l:Remove() end
+                Drawings[player].text:Remove()
+                Drawings[player] = nil
             end
             continue
         end
@@ -342,13 +365,13 @@ RunService.RenderStepped:Connect(function()
         local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
         
         if Settings.ESPEnabled and distMeters <= Settings.ESPMaxDistance then
+            -- 1. Подсветка (Highlight)
             if not Highlights[player] then
                 local hl = Instance.new("Highlight")
                 hl.Name = "PastaHighlight"
                 hl.Parent = pChar
                 Highlights[player] = hl
             end
-            
             local hl = Highlights[player]
             local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
             hl.FillColor = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
@@ -356,10 +379,57 @@ RunService.RenderStepped:Connect(function()
             hl.FillTransparency = 0.5
             hl.OutlineTransparency = 0.5
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            
+            -- 2. Скелет и Оружие (Drawing)
+            if Settings.SkeletonESP or Settings.WeaponESP then
+                if not Drawings[player] then Drawings[player] = CreateDrawing() end
+                local esp = Drawings[player]
+                local pos, on_screen = Camera:WorldToViewportPoint(pRoot.Position)
+                
+                if on_screen then
+                    if Settings.SkeletonESP then
+                        local bones = {{"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"}, {"UpperTorso", "LeftUpperArm"}, {"UpperTorso", "RightUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"RightUpperArm", "RightLowerArm"}, {"LeftLowerArm", "LeftHand"}, {"RightLowerArm", "RightHand"}, {"LowerTorso", "LeftUpperLeg"}, {"LowerTorso", "RightUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}, {"RightLowerLeg", "RightFoot"}}
+                        local r6_bones = {{"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}}
+                        local boneList = (pChar:FindFirstChild("Torso") ~= nil) and r6_bones or bones
+                        
+                        for i = 1, 15 do
+                            local line = esp.skel[i]
+                            if i <= #boneList then
+                                local p1 = pChar:FindFirstChild(boneList[i][1])
+                                local p2 = pChar:FindFirstChild(boneList[i][2])
+                                if p1 and p2 then
+                                    local p1Pos, on1 = Camera:WorldToViewportPoint(p1.Position)
+                                    local p2Pos, on2 = Camera:WorldToViewportPoint(p2.Position)
+                                    if on1 and on2 then
+                                        line.From = Vector2.new(p1Pos.X, p1Pos.Y)
+                                        line.To = Vector2.new(p2Pos.X, p2Pos.Y)
+                                        line.Color = Settings.ColorSkeleton
+                                        line.Visible = true
+                                    else line.Visible = false end
+                                else line.Visible = false end
+                            else line.Visible = false end
+                        end
+                    else for _, l in pairs(esp.skel) do l.Visible = false end end
+                    
+                    if Settings.WeaponESP then
+                        local tool = pChar:FindFirstChildOfClass("Tool")
+                        if tool then
+                            esp.text.Text = tool.Name
+                            esp.text.Position = Vector2.new(pos.X, pos.Y + (100 / pos.Z * 5) + 20)
+                            esp.text.Color = Settings.ColorText
+                            esp.text.Visible = true
+                        else esp.text.Visible = false end
+                    else esp.text.Visible = false end
+                else
+                    for _, l in pairs(esp.skel) do l.Visible = false end
+                    esp.text.Visible = false
+                end
+            end
         else
-            if Highlights[player] then
-                Highlights[player]:Destroy()
-                Highlights[player] = nil
+            if Highlights[player] then Highlights[player]:Destroy() Highlights[player] = nil end
+            if Drawings[player] then
+                for _, l in pairs(Drawings[player].skel) do l.Visible = false end
+                Drawings[player].text.Visible = false
             end
         end
     end
