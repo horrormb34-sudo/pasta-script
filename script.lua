@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Highlight ESP (Fully Unloadable)*
+-- *PASTA: External Visuals (Drawing)*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -9,6 +9,10 @@ local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
     ESPEnabled = true,
+    BoxESP = true,
+    NameESP = true,
+    DistanceESP = true,
+    HealthESP = true,
     MaxDistance = 1000,
     
     AimbotEnabled = false,
@@ -17,6 +21,7 @@ local Settings = {
     
     ColorEnemy = Color3.fromRGB(255, 105, 180),
     ColorAlly = Color3.fromRGB(0, 255, 170),
+    ColorText = Color3.fromRGB(255, 255, 255),
     
     MenuOpen = true,
     Keybind = Enum.KeyCode.RightShift,
@@ -24,8 +29,7 @@ local Settings = {
     ColorBg = Color3.fromRGB(30, 20, 25),
 }
 
-local Highlights = {}
-local Connection -- Для хранения соединения RenderStepped
+local Drawings = {}
 
 -- ==========================================
 -- UI
@@ -53,7 +57,7 @@ local Title = Instance.new("TextLabel", MainFrame)
 Title.BackgroundTransparency = 1
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "🌸 PASTA | CHAMS"
+Title.Text = "🌸 PASTA | DRAWING"
 Title.TextColor3 = Settings.ColorAccent
 Title.TextSize = 16
 Title.TextXAlignment = Enum.TextXAlignment.Left
@@ -99,7 +103,7 @@ local function CreateToggle(parent, name, posY, defaultState, callback)
     end)
 end
 
-CreateToggle(MainFrame, "Chams (Wallhack)", 50, true, function(s) Settings.ESPEnabled = s end)
+CreateToggle(MainFrame, "Wallhack (ESP)", 50, true, function(s) Settings.ESPEnabled = s end)
 CreateToggle(MainFrame, "Aimbot (RMB)", 90, false, function(s) Settings.AimbotEnabled = s end)
 
 local CloseBtn = Instance.new("TextButton", MainFrame)
@@ -113,30 +117,12 @@ CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
 CloseBtn.MouseButton1Click:Connect(function()
-    -- 1. Отключаем цикл обновления
-    if Connection then
-        Connection:Disconnect()
-        Connection = nil
+    for _, obj in pairs(Drawings) do
+        if obj.lines then for _, l in pairs(obj.lines) do l:Remove() end end
+        if obj.text then obj.text:Remove() end
     end
-    
-    -- 2. Удаляем все подсветки
-    for player, hl in pairs(Highlights) do
-        if hl and hl.Parent then
-            hl:Destroy()
-        end
-        Highlights[player] = nil
-    end
-    
-    -- 3. Возвращаем камеру в нормальное состояние (если она была изменена)
-    Camera.CameraType = Enum.CameraType.Custom
-    Camera.CameraSubject = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") or nil
-    
-    -- 4. Удаляем интерфейс
+    Drawings = {}
     ScreenGui:Destroy()
-    
-    -- 5. Восстанавливаем мышь (на случай, если игра ее заблокировала)
-    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
-    UserInputService.MouseIconEnabled = true
 end)
 
 UserInputService.InputBegan:Connect(function(input, gp)
@@ -177,15 +163,14 @@ local function GetClosestEnemy()
     return closest
 end
 
--- Сохраняем соединение в переменную, чтобы можно было его разорвать
-Connection = RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChild("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
-    -- 1. Aimbot
+    -- Aimbot
     if Settings.AimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local target = GetClosestEnemy()
         if target then
@@ -196,41 +181,78 @@ Connection = RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- 2. Chams (Highlight)
+    -- ESP (Drawing)
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
         local pHum = pChar and pChar:FindFirstChild("Humanoid")
         local pRoot = pChar and pChar:FindFirstChild("HumanoidRootPart")
         
-        if pChar and pHum and pHum.Health > 0 and pRoot then
-            local distMeters = ((pRoot.Position - hrp.Position).Magnitude) / 3.28
-            local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
+        if not pChar or not pHum or pHum.Health <= 0 or not pRoot then
+            if Drawings[player] then
+                if Drawings[player].lines then for _, l in pairs(Drawings[player].lines) do l:Remove() end end
+                if Drawings[player].text then Drawings[player].text:Remove() end
+                Drawings[player] = nil
+            end
+            continue
+        end
+        
+        local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
+        
+        if Settings.ESPEnabled and distMeters <= Settings.MaxDistance then
+            if not Drawings[player] then
+                local obj = {lines = {}, text = Drawing.new("Text")}
+                for i = 1, 4 do
+                    local line = Drawing.new("Line")
+                    line.Thickness = 1.5
+                    line.Visible = false
+                    table.insert(obj.lines, line)
+                end
+                obj.text.Size = 14
+                obj.text.Center = true
+                obj.text.Outline = true
+                obj.text.Visible = false
+                Drawings[player] = obj
+            end
             
-            if Settings.ESPEnabled and distMeters <= Settings.MaxDistance then
-                if not Highlights[player] then
-                    local hl = Instance.new("Highlight")
-                    hl.Name = "PastaHighlight"
-                    hl.Parent = pChar
-                    Highlights[player] = hl
+            local esp = Drawings[player]
+            local pos, on_screen = Camera:WorldToViewportPoint(pRoot.Position)
+            local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
+            local color = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
+            
+            if on_screen then
+                local height = 100 / pos.Z * 5
+                local width = height / 2
+                local x, y = pos.X, pos.Y
+                local topY, botY = y - height, y + height
+                
+                -- Рисуем бокс
+                local lines = {
+                    {Vector2.new(x - width, topY), Vector2.new(x + width, topY)},
+                    {Vector2.new(x + width, topY), Vector2.new(x + width, botY)},
+                    {Vector2.new(x + width, botY), Vector2.new(x - width, botY)},
+                    {Vector2.new(x - width, botY), Vector2.new(x - width, topY)}
+                }
+                for i, coords in ipairs(lines) do
+                    esp.lines[i].From = coords[1]
+                    esp.lines[i].To = coords[2]
+                    esp.lines[i].Color = color
+                    esp.lines[i].Visible = true
                 end
                 
-                local hl = Highlights[player]
-                hl.FillColor = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
-                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                hl.FillTransparency = 0.5
-                hl.OutlineTransparency = 0.5
-                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                -- Пишем текст
+                esp.text.Text = player.Name .. " [" .. distMeters .. "m]"
+                esp.text.Position = Vector2.new(x, topY - 18)
+                esp.text.Color = Settings.ColorText
+                esp.text.Visible = true
             else
-                if Highlights[player] then
-                    Highlights[player]:Destroy()
-                    Highlights[player] = nil
-                end
+                for _, l in pairs(esp.lines) do l.Visible = false end
+                esp.text.Visible = false
             end
         else
-            if Highlights[player] then
-                Highlights[player]:Destroy()
-                Highlights[player] = nil
+            if Drawings[player] then
+                for _, l in pairs(Drawings[player].lines) do l.Visible = false end
+                Drawings[player].text.Visible = false
             end
         end
     end
