@@ -18,10 +18,6 @@ local Settings = {
     AimbotFOV = 150,
     AimbotSmooth = 0.2,
     
-    -- Hitbox
-    HitboxMode = "Head",
-    HitboxSize = 5,
-    
     -- Visuals
     ESPEnabled = true,
     BoxESP = true,
@@ -47,7 +43,7 @@ local Settings = {
 }
 
 local ESP_Objects = {}
-local OriginalSizes = {}
+local FOVCircle = Drawing.new("Circle")
 
 -- ==========================================
 -- UI
@@ -154,37 +150,6 @@ local function CreateToggle(parent, name, defaultState, callback)
     end)
 end
 
-local function CreateDropdown(parent, name, options, default, callback)
-    local current = default
-    local Btn = Instance.new("TextButton", parent)
-    Btn.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
-    Btn.Size = UDim2.new(1, 0, 0, 30)
-    Btn.Text = ""
-    Btn.AutoButtonColor = false
-    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
-    
-    local Label = Instance.new("TextLabel", Btn)
-    Label.BackgroundTransparency = 1
-    Label.Position = UDim2.new(0, 10, 0, 0)
-    Label.Size = UDim2.new(1, -40, 1, 0)
-    Label.Font = Enum.Font.Gotham
-    Label.Text = name .. ": " .. default
-    Label.TextColor3 = Color3.fromRGB(255, 240, 245)
-    Label.TextSize = 12
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-
-    local index = 1
-    for i, v in ipairs(options) do if v == default then index = i break end end
-
-    Btn.MouseButton1Click:Connect(function()
-        index = index + 1
-        if index > #options then index = 1 end
-        current = options[index]
-        Label.Text = name .. ": " .. current
-        callback(current)
-    end)
-end
-
 local function CreateSlider(parent, name, min, max, default, callback)
     local Frame = Instance.new("Frame", parent)
     Frame.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
@@ -272,7 +237,7 @@ TabMisc.MouseButton1Click:Connect(function() SelectTab(TabMisc, PageMisc) end)
 TabAim.MouseButton1Click:Connect(function() SelectTab(TabAim, PageAim) end)
 TabVisuals.MouseButton1Click:Connect(function() SelectTab(TabVisuals, PageVisuals) end)
 TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAim) end)
-SelectTab(TabVisuals, PageVisuals) -- Открываем ВХ
+SelectTab(TabVisuals, PageVisuals)
 
 -- ==========================================
 -- НАПОЛНЕНИЕ
@@ -283,9 +248,8 @@ CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s 
 
 -- AIM
 CreateToggle(PageAim, "Smooth Aimbot (RMB)", false, function(s) Settings.AimbotEnabled = s end)
-CreateToggle(PageAim, "Silent Aim (Bow Fix)", false, function(s) Settings.SilentAimEnabled = s end)
 CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) 
-    Settings.AimbotFOV = val
+    Settings.AimbotFOV = val 
     FOVCircle.Radius = val
 end)
 
@@ -312,6 +276,7 @@ CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 
 CloseBtn.MouseButton1Click:Connect(function()
+    FOVCircle:Remove()
     for _, esp in pairs(ESP_Objects) do
         if esp.box then for _, l in pairs(esp.box) do l:Remove() end end
         if esp.skel then for _, l in pairs(esp.skel) do l:Remove() end end
@@ -320,9 +285,6 @@ CloseBtn.MouseButton1Click:Connect(function()
         if esp.textDist then esp.textDist:Remove() end
         if esp.textWeap then esp.textWeap:Remove() end
         if esp.healthBar then esp.healthBar:Remove() end
-    end
-    for root, originalSize in pairs(OriginalSizes) do
-        if root and root.Parent then root.Size = originalSize end
     end
     ScreenGui:Destroy()
 end)
@@ -539,11 +501,5 @@ RunService.RenderStepped:Connect(function()
                 ESP_Objects[player].textWeap.Visible = false
             end
         end
-    end
-
-    -- ANTI-AIM
-    if Settings.JitterEnabled then
-        local currentYaw = math.atan2(-hrp.CFrame.LookVector.X, -hrp.CFrame.LookVector.Z)
-        hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, currentYaw + math.rad(90), 0)
     end
 end)
