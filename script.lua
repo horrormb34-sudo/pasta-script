@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Full Menu + Fixed Visuals*
+-- *PASTA: Full Menu + Visuals (No Spinbot)*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -38,8 +38,6 @@ local Settings = {
     ColorText = Color3.fromRGB(255, 240, 245),
     
     -- Anti-Aim
-    SpinbotEnabled = false,
-    SpinSpeed = 40,
     JitterEnabled = false,
     
     MenuOpen = true,
@@ -156,6 +154,37 @@ local function CreateToggle(parent, name, defaultState, callback)
     end)
 end
 
+local function CreateDropdown(parent, name, options, default, callback)
+    local current = default
+    local Btn = Instance.new("TextButton", parent)
+    Btn.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
+    Btn.Size = UDim2.new(1, 0, 0, 30)
+    Btn.Text = ""
+    Btn.AutoButtonColor = false
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 6)
+    
+    local Label = Instance.new("TextLabel", Btn)
+    Label.BackgroundTransparency = 1
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.Size = UDim2.new(1, -40, 1, 0)
+    Label.Font = Enum.Font.Gotham
+    Label.Text = name .. ": " .. default
+    Label.TextColor3 = Color3.fromRGB(255, 240, 245)
+    Label.TextSize = 12
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local index = 1
+    for i, v in ipairs(options) do if v == default then index = i break end end
+
+    Btn.MouseButton1Click:Connect(function()
+        index = index + 1
+        if index > #options then index = 1 end
+        current = options[index]
+        Label.Text = name .. ": " .. current
+        callback(current)
+    end)
+end
+
 local function CreateSlider(parent, name, min, max, default, callback)
     local Frame = Instance.new("Frame", parent)
     Frame.BackgroundColor3 = Color3.fromRGB(45, 25, 30)
@@ -254,8 +283,11 @@ CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s 
 
 -- AIM
 CreateToggle(PageAim, "Smooth Aimbot (RMB)", false, function(s) Settings.AimbotEnabled = s end)
-CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) Settings.AimbotFOV = val end)
-CreateSlider(PageAim, "Aimbot Smooth", 0.01, 1, Settings.AimbotSmooth, function(val) Settings.AimbotSmooth = val end)
+CreateToggle(PageAim, "Silent Aim (Bow Fix)", false, function(s) Settings.SilentAimEnabled = s end)
+CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) 
+    Settings.AimbotFOV = val
+    FOVCircle.Radius = val
+end)
 
 -- VISUALS
 CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
@@ -267,8 +299,7 @@ CreateToggle(PageVisuals, "Distance (m)", true, function(s) Settings.DistanceESP
 CreateToggle(PageVisuals, "Weapon", true, function(s) Settings.WeaponESP = s end)
 CreateSlider(PageVisuals, "Max Distance (m)", 50, 2000, Settings.ESPMaxDistance, function(val) Settings.ESPMaxDistance = val end)
 
--- ANTI-AIM
-CreateToggle(PageAntiAim, "Spinbot", false, function(s) Settings.SpinbotEnabled = s end)
+-- ANTI-AIM (Без Spinbot)
 CreateToggle(PageAntiAim, "Jitter", false, function(s) Settings.JitterEnabled = s end)
 
 local CloseBtn = Instance.new("TextButton", PageMisc)
@@ -383,7 +414,7 @@ RunService.RenderStepped:Connect(function()
         end
     end
 
-    -- VISUALS (ИСПРАВЛЕННЫЙ ЦИКЛ)
+    -- VISUALS
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
@@ -406,7 +437,6 @@ RunService.RenderStepped:Connect(function()
         local distMeters = math.floor(((pRoot.Position - hrp.Position).Magnitude) / 3.28)
         
         if Settings.ESPEnabled and distMeters <= Settings.ESPMaxDistance then
-            -- Создаем объекты ТОЛЬКО когда игрок в зоне видимости (исправление)
             if not ESP_Objects[player] then ESP_Objects[player] = CreateESP() end
             
             local esp = ESP_Objects[player]
@@ -421,7 +451,6 @@ RunService.RenderStepped:Connect(function()
                 local x, y = pos.X, pos.Y
                 local topY, botY = y - height, y + height
                 
-                -- Бокс
                 if Settings.BoxESP then
                     local lines = {
                         {Vector2.new(x - width, topY), Vector2.new(x + width, topY)},
@@ -437,7 +466,6 @@ RunService.RenderStepped:Connect(function()
                     end
                 else for _, l in pairs(esp.box) do l.Visible = false end end
 
-                -- Здоровье
                 if Settings.HealthESP then
                     local hpPerc = pHum.Health / pHum.MaxHealth
                     esp.healthBar.From = Vector2.new(x - width - 5, topY + (height * 2 * (1 - hpPerc)))
@@ -446,7 +474,6 @@ RunService.RenderStepped:Connect(function()
                     esp.healthBar.Visible = true
                 else esp.healthBar.Visible = false end
                 
-                -- Имя
                 if Settings.NameESP then
                     esp.textName.Text = player.Name
                     esp.textName.Position = Vector2.new(x, topY - 18)
@@ -454,7 +481,6 @@ RunService.RenderStepped:Connect(function()
                     esp.textName.Visible = true
                 else esp.textName.Visible = false end
                 
-                -- Дистанция
                 if Settings.DistanceESP then
                     esp.textDist.Text = "[" .. distMeters .. "m]"
                     esp.textDist.Position = Vector2.new(x, botY + 5)
@@ -462,7 +488,6 @@ RunService.RenderStepped:Connect(function()
                     esp.textDist.Visible = true
                 else esp.textDist.Visible = false end
                 
-                -- Оружие
                 if Settings.WeaponESP then
                     local tool = pChar:FindFirstChildOfClass("Tool")
                     if tool then
@@ -473,7 +498,6 @@ RunService.RenderStepped:Connect(function()
                     else esp.textWeap.Visible = false end
                 else esp.textWeap.Visible = false end
                 
-                -- Скелет
                 if Settings.SkeletonESP then
                     local bones = {{"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"}, {"UpperTorso", "LeftUpperArm"}, {"UpperTorso", "RightUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"RightUpperArm", "RightLowerArm"}, {"LeftLowerArm", "LeftHand"}, {"RightLowerArm", "RightHand"}, {"LowerTorso", "LeftUpperLeg"}, {"LowerTorso", "RightUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}, {"RightLowerLeg", "RightFoot"}}
                     local r6_bones = {{"Head", "Torso"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}}
@@ -498,7 +522,6 @@ RunService.RenderStepped:Connect(function()
                     end
                 else for _, l in pairs(esp.skel) do l.Visible = false end end
             else
-                -- Если не в зоне видимости
                 for _, l in pairs(esp.box) do l.Visible = false end
                 for _, l in pairs(esp.skel) do l.Visible = false end
                 esp.healthBar.Visible = false
@@ -507,7 +530,6 @@ RunService.RenderStepped:Connect(function()
                 esp.textWeap.Visible = false
             end
         else
-            -- Если выключено
             if ESP_Objects[player] then
                 for _, l in pairs(ESP_Objects[player].box) do l.Visible = false end
                 for _, l in pairs(ESP_Objects[player].skel) do l.Visible = false end
@@ -520,10 +542,7 @@ RunService.RenderStepped:Connect(function()
     end
 
     -- ANTI-AIM
-    if Settings.SpinbotEnabled then
-        local currentYaw = math.atan2(-hrp.CFrame.LookVector.X, -hrp.CFrame.LookVector.Z)
-        hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, currentYaw + math.rad(Settings.SpinSpeed), 0)
-    elseif Settings.JitterEnabled then
+    if Settings.JitterEnabled then
         local currentYaw = math.atan2(-hrp.CFrame.LookVector.X, -hrp.CFrame.LookVector.Z)
         hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, currentYaw + math.rad(90), 0)
     end
