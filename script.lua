@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Outline ESP (No Drawing)*
+-- *PASTA: Full ESP + Aimbot + No Recoil/Spread*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -9,9 +9,14 @@ local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
     SpeedEnabled = false, SpeedValue = 50, InfJump = false,
-    AimbotEnabled = false, AimbotFOV = 150, AimbotSmooth = 0.2,
-    ESPEnabled = true, ESPMaxDistance = 1000,
     
+    -- Aim
+    AimbotEnabled = false, AimbotFOV = 150, AimbotSmooth = 0.2,
+    NoRecoil = true, -- Включено
+    NoSpread = true, -- Включено
+    
+    -- Visuals
+    ESPEnabled = true, ESPMaxDistance = 1000,
     ColorEnemy = Color3.fromRGB(255, 50, 50),
     ColorAlly = Color3.fromRGB(0, 255, 170),
     
@@ -23,6 +28,15 @@ local Settings = {
 
 local Highlights = {}
 local FOVCircle = Drawing.new("Circle")
+local lastCamCF = Camera.CFrame
+local isShooting = false
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = true end
+end)
+UserInputService.InputEnded:Connect(function(input, gp)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = false end
+end)
 
 -- ==========================================
 -- UI
@@ -216,16 +230,19 @@ TabMisc.MouseButton1Click:Connect(function() SelectTab(TabMisc, PageMisc) end)
 TabAim.MouseButton1Click:Connect(function() SelectTab(TabAim, PageAim) end)
 TabVisuals.MouseButton1Click:Connect(function() SelectTab(TabVisuals, PageVisuals) end)
 TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAim) end)
-SelectTab(TabVisuals, PageVisuals)
+SelectTab(TabAim, PageAim)
 
 CreateToggle(PageMisc, "Speed Hack", false, function(s) Settings.SpeedEnabled = s end)
 CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s end)
 
+-- ВКЛАДКА AIM
 CreateToggle(PageAim, "Smooth Aimbot (RMB)", false, function(s) Settings.AimbotEnabled = s end)
+CreateToggle(PageAim, "No Recoil (0 Отдачи)", true, function(s) Settings.NoRecoil = s end) -- НОВОЕ
+CreateToggle(PageAim, "No Spread (0 Спрея)", true, function(s) Settings.NoSpread = s end) -- НОВОЕ
 CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) Settings.AimbotFOV = val end)
 
+-- ВКЛАДКА VISUALS
 CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
-CreateToggle(PageVisuals, "Box", true, function(s) Settings.BoxESP = s end)
 CreateSlider(PageVisuals, "Max Distance (m)", 50, 3000, Settings.ESPMaxDistance, function(val) Settings.ESPMaxDistance = val end)
 
 CreateToggle(PageAntiAim, "Jitter", false, function(s) Settings.JitterEnabled = s end)
@@ -271,6 +288,41 @@ local function GetClosestEnemy()
     return closest
 end
 
+-- 0 ОТДАЧИ
+RunService.RenderStepped:Connect(function()
+    if Settings.NoRecoil then
+        local currentCF = Camera.CFrame
+        if currentCF.LookVector.Y > lastCamCF.LookVector.Y + 0.01 then
+            Camera.CFrame = lastCamCF
+        else
+            lastCamCF = currentCF
+        end
+    else
+        lastCamCF = Camera.CFrame
+    end
+end)
+
+-- 0 СПРЕЯ
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    if Settings.NoSpread and isShooting and (method == "FindPartOnRay" or method == "Raycast") then
+        if not checkcaller() then
+            local args = {...}
+            local origin = Camera.CFrame.Position
+            local direction = Camera.CFrame.LookVector * 1000
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp and (origin - hrp.Position).Magnitude < 15 then
+                if method == "FindPartOnRay" then args[1] = Ray.new(origin, direction)
+                elseif method == "Raycast" then args[1] = origin; args[2] = direction end
+                return oldNamecall(self, unpack(args))
+            end
+        end
+    end
+    return oldNamecall(self, ...)
+end)
+
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character; if not char then return end
     local hrp, hum = char:FindFirstChild("HumanoidRootPart"), char:FindFirstChild("Humanoid")
@@ -305,10 +357,9 @@ RunService.RenderStepped:Connect(function()
             local hl = Highlights[player]
             local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
             
-            -- Делаем только контур (без розовой заливки)
-            hl.FillTransparency = 1 -- Убираем заливку
+            hl.FillTransparency = 1
             hl.OutlineColor = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
-            hl.OutlineTransparency = 0 -- Контур полностью виден
+            hl.OutlineTransparency = 0
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         else
             if Highlights[player] then Highlights[player]:Destroy(); Highlights[player] = nil end
