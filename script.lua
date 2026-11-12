@@ -1,5 +1,5 @@
 -- language: Luau (Roblox), executor compatible
--- *PASTA: Full ESP + Aimbot + No Recoil/Spread*
+-- *PASTA: Full Menu (No Hooks, Safe)*
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -8,19 +8,21 @@ local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 
 local Settings = {
+    -- Misc
     SpeedEnabled = false, SpeedValue = 50, InfJump = false,
     
     -- Aim
     AimbotEnabled = false, AimbotFOV = 150, AimbotSmooth = 0.2,
-    NoRecoil = true, -- Включено
-    NoSpread = true, -- Включено
     
     -- Visuals
     ESPEnabled = true, ESPMaxDistance = 1000,
-    ColorEnemy = Color3.fromRGB(255, 50, 50),
+    ColorEnemy = Color3.fromRGB(180, 0, 255), -- Фиолетовый для врагов
     ColorAlly = Color3.fromRGB(0, 255, 170),
     
-    JitterEnabled = false, MenuOpen = true,
+    -- Anti-Aim
+    JitterEnabled = false,
+    
+    MenuOpen = true,
     Keybind = Enum.KeyCode.RightShift,
     ColorAccent = Color3.fromRGB(255, 105, 180),
     ColorBg = Color3.fromRGB(30, 20, 25),
@@ -28,15 +30,6 @@ local Settings = {
 
 local Highlights = {}
 local FOVCircle = Drawing.new("Circle")
-local lastCamCF = Camera.CFrame
-local isShooting = false
-
-UserInputService.InputBegan:Connect(function(input, gp)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = true end
-end)
-UserInputService.InputEnded:Connect(function(input, gp)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then isShooting = false end
-end)
 
 -- ==========================================
 -- UI
@@ -230,18 +223,14 @@ TabMisc.MouseButton1Click:Connect(function() SelectTab(TabMisc, PageMisc) end)
 TabAim.MouseButton1Click:Connect(function() SelectTab(TabAim, PageAim) end)
 TabVisuals.MouseButton1Click:Connect(function() SelectTab(TabVisuals, PageVisuals) end)
 TabAntiAim.MouseButton1Click:Connect(function() SelectTab(TabAntiAim, PageAntiAim) end)
-SelectTab(TabAim, PageAim)
+SelectTab(TabVisuals, PageVisuals)
 
 CreateToggle(PageMisc, "Speed Hack", false, function(s) Settings.SpeedEnabled = s end)
 CreateToggle(PageMisc, "Infinite Jump", false, function(s) Settings.InfJump = s end)
 
--- ВКЛАДКА AIM
 CreateToggle(PageAim, "Smooth Aimbot (RMB)", false, function(s) Settings.AimbotEnabled = s end)
-CreateToggle(PageAim, "No Recoil (0 Отдачи)", true, function(s) Settings.NoRecoil = s end) -- НОВОЕ
-CreateToggle(PageAim, "No Spread (0 Спрея)", true, function(s) Settings.NoSpread = s end) -- НОВОЕ
 CreateSlider(PageAim, "FOV Radius", 50, 500, Settings.AimbotFOV, function(val) Settings.AimbotFOV = val end)
 
--- ВКЛАДКА VISUALS
 CreateToggle(PageVisuals, "Wallhack (ESP)", true, function(s) Settings.ESPEnabled = s end)
 CreateSlider(PageVisuals, "Max Distance (m)", 50, 3000, Settings.ESPMaxDistance, function(val) Settings.ESPMaxDistance = val end)
 
@@ -288,52 +277,29 @@ local function GetClosestEnemy()
     return closest
 end
 
--- 0 ОТДАЧИ
-RunService.RenderStepped:Connect(function()
-    if Settings.NoRecoil then
-        local currentCF = Camera.CFrame
-        if currentCF.LookVector.Y > lastCamCF.LookVector.Y + 0.01 then
-            Camera.CFrame = lastCamCF
-        else
-            lastCamCF = currentCF
-        end
-    else
-        lastCamCF = Camera.CFrame
-    end
-end)
-
--- 0 СПРЕЯ
-local oldNamecall
-oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    local method = getnamecallmethod()
-    if Settings.NoSpread and isShooting and (method == "FindPartOnRay" or method == "Raycast") then
-        if not checkcaller() then
-            local args = {...}
-            local origin = Camera.CFrame.Position
-            local direction = Camera.CFrame.LookVector * 1000
-            local char = LocalPlayer.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp and (origin - hrp.Position).Magnitude < 15 then
-                if method == "FindPartOnRay" then args[1] = Ray.new(origin, direction)
-                elseif method == "Raycast" then args[1] = origin; args[2] = direction end
-                return oldNamecall(self, unpack(args))
-            end
-        end
-    end
-    return oldNamecall(self, ...)
-end)
-
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character; if not char then return end
     local hrp, hum = char:FindFirstChild("HumanoidRootPart"), char:FindFirstChild("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2); FOVCircle.Visible = Settings.AimbotEnabled
+    -- AIM
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    FOVCircle.Radius = Settings.AimbotFOV
+    FOVCircle.Color = Settings.ColorEnemy
+    FOVCircle.Visible = Settings.AimbotEnabled
+    FOVCircle.Filled = false
+
     if Settings.AimbotEnabled and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
         local t = GetClosestEnemy()
-        if t then local p = t:FindFirstChild("Head") or t:FindFirstChild("HumanoidRootPart"); if p then Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, p.Position), Settings.AimbotSmooth) end end
+        if t then 
+            local p = t:FindFirstChild("Head") or t:FindFirstChild("HumanoidRootPart")
+            if p then 
+                Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, p.Position), Settings.AimbotSmooth) 
+            end 
+        end
     end
 
+    -- VISUALS (Фиолетовый Highlight)
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
         local pChar = player.Character
@@ -357,9 +323,11 @@ RunService.RenderStepped:Connect(function()
             local hl = Highlights[player]
             local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
             
-            hl.FillTransparency = 1
-            hl.OutlineColor = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
-            hl.OutlineTransparency = 0
+            -- Фиолетовый цвет
+            hl.FillColor = isEnemy and Settings.ColorEnemy or Settings.ColorAlly
+            hl.FillTransparency = 0.5
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.OutlineTransparency = 0.5
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         else
             if Highlights[player] then Highlights[player]:Destroy(); Highlights[player] = nil end
